@@ -1,7 +1,7 @@
 """One Lucent overlay window. Open as many as you like; each has its own look."""
 from PySide6.QtCore import (QEasingCurve, QEvent, QParallelAnimationGroup,
                             QPoint, QPropertyAnimation, QRect, QRectF, Qt, QTimer, Signal)
-from PySide6.QtGui import (QColor, QFont, QGuiApplication, QKeySequence,
+from PySide6.QtGui import (QColor, QCursor, QFont, QGuiApplication, QKeySequence,
                            QPainter, QShortcut)
 from PySide6.QtWidgets import QFileDialog, QVBoxLayout, QWidget
 
@@ -85,7 +85,7 @@ class OverlayWindow(QWidget):
         t.click_through_toggled.connect(self.toggle_click_through)
         t.collapse_toggled.connect(self.toggle_collapse)
         t.fullscreen_toggled.connect(self.toggle_fullscreen)
-        t.minimize_clicked.connect(self.showMinimized)
+        t.minimize_clicked.connect(self.minimize_animated)
         t.maximize_toggled.connect(self.toggle_maximize)
         t.close_clicked.connect(self.close)
         p = self.popup
@@ -167,14 +167,34 @@ class OverlayWindow(QWidget):
             self.open_source(text)
 
     def toggle_collapse(self):
+        # Stop any existing collapse animation
+        if hasattr(self, "_collapse_anim") and self._collapse_anim and self._collapse_anim.state() == QPropertyAnimation.Running:
+            self._collapse_anim.stop()
+
         self._collapsed = not self._collapsed
+        cur_geom = self.geometry()
+
         if self._collapsed:
-            self._pre_collapse_geom = self.geometry()
+            self._pre_collapse_geom = cur_geom
+            target_geom = QRect(cur_geom.x(), cur_geom.y(), 50, 50)
             self.titlebar.hide()
             self.body.hide()
             self.layout().setContentsMargins(0, 0, 0, 0)
+            self.setMinimumSize(0, 0)
+            self.setMaximumSize(16777215, 16777215)
             self.setFixedSize(50, 50)
             self.setToolTip(f"Lucent #{self.index} (Double-click or press Ctrl+K to expand)")
+            self.titlebar.set_collapsed(True)
+
+            # Animate geometry shrink smoothly
+            anim = QPropertyAnimation(self, b"geometry")
+            anim.setDuration(160)
+            anim.setStartValue(cur_geom)
+            anim.setEndValue(target_geom)
+            anim.setEasingCurve(QEasingCurve.OutCubic)
+            anim.finished.connect(lambda: (self.setFixedSize(50, 50), self.update()))
+            self._collapse_anim = anim
+            anim.start()
         else:
             self.setMinimumSize(380, 260)
             self.setMaximumSize(16777215, 16777215)
@@ -182,12 +202,18 @@ class OverlayWindow(QWidget):
             self.titlebar.show()
             self.body.show()
             self.setToolTip("")
-            if self._pre_collapse_geom:
-                self.setGeometry(self._pre_collapse_geom)
-            else:
-                self.resize(940, 640)
-        self.titlebar.set_collapsed(self._collapsed)
-        self.update()
+            self.titlebar.set_collapsed(False)
+
+            target_geom = self._pre_collapse_geom if self._pre_collapse_geom else QRect(cur_geom.x(), cur_geom.y(), 940, 640)
+
+            anim = QPropertyAnimation(self, b"geometry")
+            anim.setDuration(200)
+            anim.setStartValue(cur_geom)
+            anim.setEndValue(target_geom)
+            anim.setEasingCurve(QEasingCurve.OutCubic)
+            anim.finished.connect(lambda: self.update())
+            self._collapse_anim = anim
+            anim.start()
 
     def toggle_click_through(self):
         self.set_click_through(not self.look.click_through)
@@ -232,7 +258,7 @@ class OverlayWindow(QWidget):
         # Convert button global rect to check if cursor is strictly over the ghost button
         btn_top_left = btn.mapToGlobal(QPoint(0, 0))
         btn_rect = QRect(btn_top_left, btn.size())
-        cursor_pos = QGuiApplication.primaryScreen().cursor().pos()
+        cursor_pos = QCursor.pos()
 
         is_over_btn = btn_rect.contains(cursor_pos)
         if is_over_btn != self._ghost_btn_active:
@@ -399,6 +425,33 @@ class OverlayWindow(QWidget):
         super().mouseDoubleClickEvent(e)
 
     # showing, fullscreen, maximize --------------------------------------
+    def minimize_animated(self):
+        cur_pos = self.pos()
+        fade = QPropertyAnimation(self, b"windowOpacity")
+        fade.setStartValue(self.windowOpacity())
+        fade.setEndValue(0.0)
+        fade.setDuration(160)
+        fade.setEasingCurve(QEasingCurve.InQuad)
+
+        slide = QPropertyAnimation(self, b"pos")
+        slide.setStartValue(cur_pos)
+        slide.setEndValue(cur_pos + QPoint(0, 16))
+        slide.setDuration(160)
+        slide.setEasingCurve(QEasingCurve.InQuad)
+
+        group = QParallelAnimationGroup(self)
+        group.addAnimation(fade)
+        group.addAnimation(slide)
+
+        def on_min_done():
+            self.showMinimized()
+            self.setWindowOpacity(self.look.opacity)
+            self.move(cur_pos)
+
+        group.finished.connect(on_min_done)
+        self._min_anim = group
+        group.start()
+
     def show_animated(self):
         end = self.pos()
         self.setWindowOpacity(0.0)
@@ -407,14 +460,14 @@ class OverlayWindow(QWidget):
         fade = QPropertyAnimation(self, b"windowOpacity")
         fade.setStartValue(0.0)
         fade.setEndValue(self.look.opacity)
-        fade.setDuration(260)
-        fade.setEasingCurve(QEasingCurve.OutQuad)
+        fade.setDuration(240)
+        fade.setEasingCurve(QEasingCurve.OutCubic)
 
         slide = QPropertyAnimation(self, b"pos")
         slide.setStartValue(end + QPoint(0, 10))
         slide.setEndValue(end)
-        slide.setDuration(260)
-        slide.setEasingCurve(QEasingCurve.OutQuad)
+        slide.setDuration(240)
+        slide.setEasingCurve(QEasingCurve.OutCubic)
 
         group = QParallelAnimationGroup(self)
         group.addAnimation(fade)

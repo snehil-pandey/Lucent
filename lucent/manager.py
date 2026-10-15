@@ -122,6 +122,9 @@ class Manager(QObject):
             else:
                 self.spawn(None)
 
+        # Show the listing of overlays (Hub window) first on startup
+        self.show_hub()
+
     def _on_app_quit(self):
         session_data = []
         for w in self._windows:
