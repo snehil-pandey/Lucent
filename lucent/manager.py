@@ -107,35 +107,13 @@ class Manager(QObject):
         if self._launched:
             return
         self._launched = True
+
+        # If user explicitly passed files or links via CLI arguments, open them
         if self._sources:
             for src in self._sources:
                 self.spawn(src)
-        else:
-            saved = load_session()
-            if saved:
-                for item in saved:
-                    src = item.get("source")
-                    raw_look = item.get("look")
-                    custom_look = None
-                    if raw_look and isinstance(raw_look, dict):
-                        custom_look = Look(
-                            opacity=float(raw_look.get("opacity", 0.88)),
-                            hue=int(raw_look.get("hue", 215)),
-                            on_top=bool(raw_look.get("on_top", True)),
-                            hide_from_capture=bool(raw_look.get("hide_from_capture", True)),
-                            click_through=bool(raw_look.get("click_through", False)),
-                            invert_colors=bool(raw_look.get("invert_colors", False)),
-                        )
-                    oid = item.get("id")
-                    name = item.get("name")
-                    win = self.spawn(src, look=custom_look, overlay_id=oid, name=name)
-                    geom = item.get("geometry")
-                    if geom and len(geom) == 4:
-                        win.setGeometry(QRect(*geom))
-            else:
-                self.spawn(None)
 
-        # Show the listing of overlays (Main app window) first on startup
+        # Always open the Main App screen on startup with focus on input box; user controls when overlays open
         self.show_hub(focus_input=True)
 
     def _on_app_quit(self):
