@@ -39,13 +39,13 @@ def test_hue_slider_interaction(qtbot, overlay):
 
 def test_collapse_toggle(qtbot, overlay):
     initial_height = overlay.height()
-    # Click collapse button on titlebar
-    qtbot.mouseClick(overlay.titlebar.btn_collapse, Qt.LeftButton)
+    # Toggle collapse via method / shortcut
+    overlay.toggle_collapse()
     assert overlay._collapsed is True
     assert overlay.height() < initial_height
 
     # Toggle back
-    qtbot.mouseClick(overlay.titlebar.btn_collapse, Qt.LeftButton)
+    overlay.toggle_collapse()
     assert overlay._collapsed is False
 
 

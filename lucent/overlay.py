@@ -76,17 +76,10 @@ class OverlayWindow(QWidget):
 
     def _wire(self):
         t = self.titlebar
-        t.address_submitted.connect(self.open_source)
         t.new_overlay.connect(lambda: self.new_overlay_requested.emit(None))
-        t.open_file.connect(self.open_dialog)
-        t.hub_clicked.connect(self.hub_requested)
         t.settings_clicked.connect(self.popup.show_below)
         t.invert_toggled.connect(self.toggle_invert_colors)
         t.click_through_toggled.connect(self.toggle_click_through)
-        t.collapse_toggled.connect(self.toggle_collapse)
-        t.fullscreen_toggled.connect(self.toggle_fullscreen)
-        t.minimize_clicked.connect(self.minimize_animated)
-        t.maximize_toggled.connect(self.toggle_maximize)
         t.close_clicked.connect(self.close)
         p = self.popup
         p.opacity_changed.connect(self.set_opacity)
@@ -105,7 +98,6 @@ class OverlayWindow(QWidget):
         sc("Ctrl+N", lambda: self.new_overlay_requested.emit(None))
         sc("Ctrl+H", self.hub_requested.emit)
         sc("Ctrl+O", self.open_dialog)
-        sc("Ctrl+L", self.titlebar.focus_address)
         sc("Ctrl+W", self.close)
         sc("Ctrl+I", self.toggle_invert_colors)
         sc("Ctrl+M", self.toggle_click_through)
@@ -184,7 +176,6 @@ class OverlayWindow(QWidget):
             self.setMaximumSize(16777215, 16777215)
             self.setFixedSize(50, 50)
             self.setToolTip(f"Lucent #{self.index} (Double-click or press Ctrl+K to expand)")
-            self.titlebar.set_collapsed(True)
 
             # Animate geometry shrink smoothly
             anim = QPropertyAnimation(self, b"geometry")
@@ -202,7 +193,6 @@ class OverlayWindow(QWidget):
             self.titlebar.show()
             self.body.show()
             self.setToolTip("")
-            self.titlebar.set_collapsed(False)
 
             target_geom = self._pre_collapse_geom if self._pre_collapse_geom else QRect(cur_geom.x(), cur_geom.y(), 940, 640)
 
@@ -299,10 +289,11 @@ class OverlayWindow(QWidget):
         self.body_layout.addWidget(viewer)
         viewer.apply_theme(self.look.hue)
         viewer.title_changed.connect(self._on_title)
-        viewer.source_changed.connect(self.titlebar.set_address)
 
     def _on_title(self, title):
-        self.setWindowTitle(f"{title} — Lucent" if title else "Lucent")
+        display_title = title if title else f"Overlay #{self.index}"
+        self.setWindowTitle(f"{display_title} — Lucent")
+        self.titlebar.set_title(display_title)
 
     # look ---------------------------------------------------------------
     def set_opacity(self, value: float):
@@ -524,7 +515,6 @@ class OverlayWindow(QWidget):
             m = 0 if (fs or mx) else EDGE
             self.layout().setContentsMargins(m, m, m, m)
             self.titlebar.setVisible(not fs)
-            self.titlebar.set_state(mx, fs)
         super().changeEvent(e)
 
     def closeEvent(self, e):
