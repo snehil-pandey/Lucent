@@ -1,6 +1,6 @@
 """One Lucent overlay window. Open as many as you like; each has its own look."""
 from PySide6.QtCore import (QEasingCurve, QEvent, QParallelAnimationGroup,
-                            QPoint, QPropertyAnimation, QRectF, Qt, QTimer, Signal)
+                            QPoint, QPropertyAnimation, QRect, QRectF, Qt, QTimer, Signal)
 from PySide6.QtGui import (QColor, QFont, QGuiApplication, QKeySequence,
                            QPainter, QShortcut)
 from PySide6.QtWidgets import QFileDialog, QVBoxLayout, QWidget
@@ -22,6 +22,7 @@ VK_M = 0x4D
 class OverlayWindow(QWidget):
     closed = Signal(object)
     new_overlay_requested = Signal(object)   # a source to open, or None for an empty one
+    hub_requested = Signal()
 
     def __init__(self, look: Look, source=None, index: int = 1):
         super().__init__()
@@ -78,6 +79,7 @@ class OverlayWindow(QWidget):
         t.address_submitted.connect(self.open_source)
         t.new_overlay.connect(lambda: self.new_overlay_requested.emit(None))
         t.open_file.connect(self.open_dialog)
+        t.hub_clicked.connect(self.hub_requested)
         t.settings_clicked.connect(self.popup.show_below)
         t.invert_toggled.connect(self.toggle_invert_colors)
         t.click_through_toggled.connect(self.toggle_click_through)
@@ -101,6 +103,7 @@ class OverlayWindow(QWidget):
         sc("F11", self.toggle_fullscreen)
         sc("Esc", lambda: self.isFullScreen() and self.toggle_fullscreen())
         sc("Ctrl+N", lambda: self.new_overlay_requested.emit(None))
+        sc("Ctrl+H", self.hub_requested.emit)
         sc("Ctrl+O", self.open_dialog)
         sc("Ctrl+L", self.titlebar.focus_address)
         sc("Ctrl+W", self.close)
@@ -193,6 +196,10 @@ class OverlayWindow(QWidget):
         self.look.click_through = enabled
         if winapi.WIN:
             winapi.set_click_through(self, enabled)
+            if enabled:
+                self._start_ghost_hover_tracker()
+            else:
+                self._stop_ghost_hover_tracker()
         else:
             # Cross-platform Qt fallback for Linux/macOS
             was_visible = self.isVisible()
@@ -202,6 +209,41 @@ class OverlayWindow(QWidget):
         self.titlebar.set_click_through(enabled)
         self.popup.sync(self.look)
         save_look(self.look)
+
+    def _start_ghost_hover_tracker(self):
+        if not hasattr(self, "_ghost_timer"):
+            self._ghost_timer = QTimer(self)
+            self._ghost_timer.setInterval(40)  # fast, responsive 25fps poll
+            self._ghost_timer.timeout.connect(self._check_ghost_hover)
+        self._ghost_btn_active = False
+        self._ghost_timer.start()
+
+    def _stop_ghost_hover_tracker(self):
+        if hasattr(self, "_ghost_timer") and self._ghost_timer.isActive():
+            self._ghost_timer.stop()
+        self._ghost_btn_active = False
+
+    def _check_ghost_hover(self):
+        if not self.look.click_through or not self.isVisible() or self._collapsed:
+            return
+        btn = self.titlebar.btn_ghost
+        if not btn.isVisible():
+            return
+        # Convert button global rect to check if cursor is strictly over the ghost button
+        btn_top_left = btn.mapToGlobal(QPoint(0, 0))
+        btn_rect = QRect(btn_top_left, btn.size())
+        cursor_pos = QGuiApplication.primaryScreen().cursor().pos()
+
+        is_over_btn = btn_rect.contains(cursor_pos)
+        if is_over_btn != self._ghost_btn_active:
+            self._ghost_btn_active = is_over_btn
+            if is_over_btn:
+                # Cursor is hovering over ONLY the click-through button:
+                # Temporarily remove WS_EX_TRANSPARENT so the button can receive click
+                winapi.set_click_through(self, False)
+            else:
+                # Outside the button: restore click-through pass-through immediately
+                winapi.set_click_through(self, True)
 
     # content ------------------------------------------------------------
     def open_source(self, text):
@@ -385,7 +427,7 @@ class OverlayWindow(QWidget):
         super().showEvent(e)
         QTimer.singleShot(0, self._apply_capture)
         if self.look.click_through:
-            QTimer.singleShot(0, lambda: winapi.set_click_through(self, True))
+            QTimer.singleShot(0, lambda: self.set_click_through(True))
         self._register_hotkey()
 
     def _register_hotkey(self):
@@ -433,6 +475,7 @@ class OverlayWindow(QWidget):
         super().changeEvent(e)
 
     def closeEvent(self, e):
+        self._stop_ghost_hover_tracker()
         self._unregister_hotkey()
         save_look(self.look)
         self.closed.emit(self)

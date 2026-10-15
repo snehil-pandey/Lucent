@@ -1,6 +1,6 @@
 import os
 
-from PySide6.QtCore import QUrl
+from PySide6.QtCore import QUrl, Signal
 from PySide6.QtGui import QColor
 from PySide6.QtWidgets import QVBoxLayout
 
@@ -17,6 +17,8 @@ except ImportError:  # pragma: no cover
 
 class WebViewer(Viewer):
     _shared_profile = None
+    title_changed = Signal(str)
+    source_changed = Signal(str)
 
     @classmethod
     def accepts(cls, source):
@@ -45,10 +47,14 @@ class WebViewer(Viewer):
         self._web.setPage(page)
         self._web.page().setBackgroundColor(QColor(0, 0, 0, 0))
         self._web.titleChanged.connect(self.title_changed)
-        self._web.urlChanged.connect(lambda u: self.source_changed.emit(u.toString()))
+        self._web.urlChanged.connect(self._on_url_changed)
         lay = QVBoxLayout(self)
         lay.setContentsMargins(0, 0, 0, 0)
         lay.addWidget(self._web)
+
+    def _on_url_changed(self, url):
+        u_str = url.toString() if hasattr(url, "toString") else str(url)
+        self.source_changed.emit(u_str)
 
     def load(self, source):
         url = QUrl.fromLocalFile(source) if os.path.isfile(source) else QUrl(source)

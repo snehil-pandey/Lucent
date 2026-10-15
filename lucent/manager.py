@@ -7,6 +7,7 @@ from PySide6.QtWidgets import QMenu, QSystemTrayIcon
 
 from .config import (get_recent_sources, load_look, load_session,
                      save_session)
+from .hub import HubWindow
 from .icon import app_icon
 from .overlay import OverlayWindow
 from .splash import Splash
@@ -22,6 +23,7 @@ class Manager(QObject):
         self._launched = False
         self._tray = None
         self._menu = None
+        self._hub = None
         self._init_tray()
         app = QGuiApplication.instance()
         if app:
@@ -42,6 +44,10 @@ class Manager(QObject):
     def _rebuild_tray_menu(self):
         m = self._menu
         m.clear()
+
+        act_hub = QAction("All Overlays Hub (Ctrl+H)", m)
+        act_hub.triggered.connect(self.show_hub)
+        m.addAction(act_hub)
 
         act_toggle_ghost = QAction("Toggle Click-Through (Ctrl+Alt+M)", m)
         act_toggle_ghost.triggered.connect(self.toggle_all_click_through)
@@ -126,12 +132,33 @@ class Manager(QObject):
             })
         save_session(session_data)
 
+    def show_hub(self):
+        if self._hub is None:
+            self._hub = HubWindow(self)
+            self._hub.spawn_requested.connect(lambda: self.spawn())
+            self._hub.bring_front_requested.connect(self._bring_overlay_to_front)
+            self._hub.toggle_collapse_requested.connect(lambda w: (w.toggle_collapse(), self._hub.refresh(self._windows)))
+            self._hub.toggle_click_through_requested.connect(lambda w: (w.toggle_click_through(), self._hub.refresh(self._windows)))
+            self._hub.close_overlay_requested.connect(lambda w: w.close())
+
+        self._hub.refresh(self._windows)
+        self._hub.showNormal()
+        self._hub.raise_()
+        self._hub.activateWindow()
+
+    def _bring_overlay_to_front(self, win):
+        if win in self._windows:
+            win.showNormal()
+            win.raise_()
+            win.activateWindow()
+
     def spawn(self, source=None, origin=None):
         look = copy(origin.look if origin else self._look)
         index = len(self._windows) + 1
         win = OverlayWindow(look, source, index=index)
         win.closed.connect(self._on_closed)
         win.new_overlay_requested.connect(lambda s, w=win: self.spawn(s, w))
+        win.hub_requested.connect(self.show_hub)
 
         if origin:
             full = origin.isMaximized() or origin.isFullScreen()
@@ -146,8 +173,12 @@ class Manager(QObject):
 
         self._windows.append(win)
         win.show_animated()
+        if self._hub and self._hub.isVisible():
+            self._hub.refresh(self._windows)
         return win
 
     def _on_closed(self, win):
         if win in self._windows:
             self._windows.remove(win)
+        if self._hub and self._hub.isVisible():
+            self._hub.refresh(self._windows)

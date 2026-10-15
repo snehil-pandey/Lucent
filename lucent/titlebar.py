@@ -11,6 +11,7 @@ WIN = sys.platform == "win32"
 GLYPH = {
     "new": "\uE710" if WIN else "+",
     "open": "\uE8E5" if WIN else "▤",
+    "hub": "\uE8C0" if WIN else "🗈",
     "invert": "\uE793" if WIN else "◐",
     "settings": "\uE713" if WIN else "⚙",
     "click_through": "\uE790" if WIN else "👻",
@@ -46,6 +47,7 @@ class TitleBar(QWidget):
     click_through_toggled = Signal()
     collapse_toggled = Signal()
     invert_toggled = Signal()
+    hub_clicked = Signal()
     fullscreen_toggled = Signal()
     minimize_clicked = Signal()
     maximize_toggled = Signal()
@@ -71,6 +73,7 @@ class TitleBar(QWidget):
 
         self.btn_new = _button(GLYPH["new"], "New overlay  (Ctrl+N)", "tool")
         self.btn_open = _button(GLYPH["open"], "Open file…  (Ctrl+O)", "tool")
+        self.btn_hub = _button(GLYPH["hub"], "All Overlays Hub / Sticky Notes List (Ctrl+H)", "tool")
         self.btn_invert = _button(GLYPH["invert"], "Invert / Dark mode (Ctrl+I)", "tool")
         self.btn_ghost = _button(GLYPH["click_through"], "Click-through / Ghost mode (Ctrl+M)", "tool")
         self.btn_collapse = _button(GLYPH["collapse"], "Collapse / Shade window (Ctrl+K)", "tool")
@@ -82,6 +85,7 @@ class TitleBar(QWidget):
 
         self.btn_new.clicked.connect(self.new_overlay)
         self.btn_open.clicked.connect(self.open_file)
+        self.btn_hub.clicked.connect(self.hub_clicked)
         self.btn_invert.clicked.connect(self.invert_toggled)
         self.btn_ghost.clicked.connect(self.click_through_toggled)
         self.btn_collapse.clicked.connect(self.collapse_toggled)
@@ -95,7 +99,7 @@ class TitleBar(QWidget):
         lay.addWidget(title)
         lay.addSpacing(8)
         lay.addWidget(self.address, 1)
-        for b in (self.btn_new, self.btn_open, self.btn_invert, self.btn_ghost, self.btn_collapse, self.btn_settings, self.btn_full):
+        for b in (self.btn_new, self.btn_open, self.btn_hub, self.btn_invert, self.btn_ghost, self.btn_collapse, self.btn_settings, self.btn_full):
             lay.addWidget(b)
         lay.addSpacing(6)
         for b in (self.btn_min, self.btn_max, self.btn_close):
