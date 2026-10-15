@@ -128,7 +128,8 @@ class Manager(QObject):
 
     def spawn(self, source=None, origin=None):
         look = copy(origin.look if origin else self._look)
-        win = OverlayWindow(look, source)
+        index = len(self._windows) + 1
+        win = OverlayWindow(look, source, index=index)
         win.closed.connect(self._on_closed)
         win.new_overlay_requested.connect(lambda s, w=win: self.spawn(s, w))
 

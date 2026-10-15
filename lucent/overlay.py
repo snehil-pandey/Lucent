@@ -1,12 +1,13 @@
 """One Lucent overlay window. Open as many as you like; each has its own look."""
 from PySide6.QtCore import (QEasingCurve, QEvent, QParallelAnimationGroup,
-                            QPoint, QPropertyAnimation, Qt, QTimer, Signal)
-from PySide6.QtGui import QColor, QGuiApplication, QKeySequence, QPainter, QShortcut
+                            QPoint, QPropertyAnimation, QRectF, Qt, QTimer, Signal)
+from PySide6.QtGui import (QColor, QFont, QGuiApplication, QKeySequence,
+                           QPainter, QShortcut)
 from PySide6.QtWidgets import QFileDialog, QVBoxLayout, QWidget
 
 from . import theme, winapi
 from .config import Look, add_recent_source, save_look
-from .icon import app_icon
+from .icon import app_icon, draw_moon
 from .settings_popup import SettingsPopup
 from .sources import normalize_source
 from .titlebar import TitleBar
@@ -22,16 +23,17 @@ class OverlayWindow(QWidget):
     closed = Signal(object)
     new_overlay_requested = Signal(object)   # a source to open, or None for an empty one
 
-    def __init__(self, look: Look, source=None):
+    def __init__(self, look: Look, source=None, index: int = 1):
         super().__init__()
         self.look = look
+        self.index = index
         self.current_source = None
         self._viewer = None
         self._intro = None
         self._was_maximized = False
         self._drag_pos = None
 
-        self.setWindowTitle("Lucent")
+        self.setWindowTitle(f"Lucent #{self.index}")
         self.setWindowIcon(app_icon())
         self.setAttribute(Qt.WA_DeleteOnClose)
         self.setMouseTracking(True)
@@ -51,7 +53,7 @@ class OverlayWindow(QWidget):
         root.addWidget(self.body, 1)
 
         self._collapsed = False
-        self._pre_collapse_height = 640
+        self._pre_collapse_geom = None
 
         self.popup = SettingsPopup(self)
         self._wire()
@@ -164,15 +166,25 @@ class OverlayWindow(QWidget):
     def toggle_collapse(self):
         self._collapsed = not self._collapsed
         if self._collapsed:
-            self._pre_collapse_height = max(self.height(), 260)
+            self._pre_collapse_geom = self.geometry()
+            self.titlebar.hide()
             self.body.hide()
-            self.setMinimumHeight(TitleBar.HEIGHT + 2 * EDGE)
-            self.resize(self.width(), TitleBar.HEIGHT + 2 * EDGE)
+            self.layout().setContentsMargins(0, 0, 0, 0)
+            self.setFixedSize(50, 50)
+            self.setToolTip(f"Lucent #{self.index} (Double-click or press Ctrl+K to expand)")
         else:
+            self.setMinimumSize(380, 260)
+            self.setMaximumSize(16777215, 16777215)
+            self.layout().setContentsMargins(EDGE, EDGE, EDGE, EDGE)
+            self.titlebar.show()
             self.body.show()
-            self.setMinimumHeight(260)
-            self.resize(self.width(), self._pre_collapse_height)
+            self.setToolTip("")
+            if self._pre_collapse_geom:
+                self.setGeometry(self._pre_collapse_geom)
+            else:
+                self.resize(940, 640)
         self.titlebar.set_collapsed(self._collapsed)
+        self.update()
 
     def toggle_click_through(self):
         self.set_click_through(not self.look.click_through)
@@ -303,12 +315,46 @@ class OverlayWindow(QWidget):
 
     def paintEvent(self, _):
         p = QPainter(self)
-        p.fillRect(self.rect(), theme.background(self.look.hue))
-        border = theme.accent(self.look.hue)
-        border.setAlpha(110)
-        p.setPen(border)
-        p.drawRect(self.rect().adjusted(0, 0, -1, -1))
+        p.setRenderHint(QPainter.Antialiasing)
+        if self._collapsed:
+            # Draw sleek circular/rounded icon badge with moon and overlay number
+            rect = QRectF(self.rect()).adjusted(1, 1, -1, -1)
+            p.setBrush(theme.background(self.look.hue))
+            acc = theme.accent(self.look.hue)
+            p.setPen(acc)
+            p.drawRoundedRect(rect, 12, 12)
+
+            # Draw moon in center
+            moon_rect = QRectF(8, 8, 34, 34)
+            draw_moon(p, moon_rect, glow=0.3, opacity=0.95)
+
+            # Draw overlay index badge in bottom-right corner
+            badge_bg = acc
+            badge_bg.setAlpha(220)
+            p.setBrush(badge_bg)
+            p.setPen(Qt.NoPen)
+            badge_rect = QRectF(28, 28, 18, 18)
+            p.drawEllipse(badge_rect)
+
+            p.setPen(Qt.white)
+            font = QFont("Segoe UI", 8)
+            font.setBold(True)
+            p.setFont(font)
+            p.drawText(badge_rect, Qt.AlignCenter, str(self.index))
+        else:
+            p.fillRect(self.rect(), theme.background(self.look.hue))
+            border = theme.accent(self.look.hue)
+            border.setAlpha(110)
+            p.setPen(border)
+            p.drawRect(self.rect().adjusted(0, 0, -1, -1))
         p.end()
+
+    def mouseDoubleClickEvent(self, e):
+        if self._collapsed:
+            self.toggle_collapse()
+            e.accept()
+            return
+        super().mouseDoubleClickEvent(e)
 
     # showing, fullscreen, maximize --------------------------------------
     def show_animated(self):
@@ -429,6 +475,12 @@ class OverlayWindow(QWidget):
             self.unsetCursor()
 
     def mousePressEvent(self, e):
+        # In collapsed icon mode, let user directly drag the icon without needing Alt
+        if self._collapsed and e.button() == Qt.LeftButton:
+            self._drag_pos = e.globalPosition().toPoint()
+            e.accept()
+            return
+
         # Alt + Left Click anywhere on the overlay window lets you drag and move it!
         if e.button() == Qt.LeftButton and (e.modifiers() & Qt.AltModifier):
             self._drag_pos = e.globalPosition().toPoint()

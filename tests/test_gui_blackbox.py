@@ -16,7 +16,7 @@ def overlay(qtbot):
 
 
 def test_overlay_initial_state(overlay):
-    assert overlay.windowTitle() == "Lucent"
+    assert overlay.windowTitle().startswith("Lucent")
     assert overlay.look.opacity == 0.85
     assert overlay.look.hue == 200
     assert overlay.isFullScreen() is False
