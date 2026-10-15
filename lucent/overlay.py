@@ -310,19 +310,23 @@ class OverlayWindow(QWidget):
     def show_animated(self):
         end = self.pos()
         self.setWindowOpacity(0.0)
-        self.move(end + QPoint(0, 18))
+        self.move(end + QPoint(0, 10))
         self.show()
         fade = QPropertyAnimation(self, b"windowOpacity")
         fade.setStartValue(0.0)
         fade.setEndValue(self.look.opacity)
+        fade.setDuration(260)
+        fade.setEasingCurve(QEasingCurve.OutQuad)
+
         slide = QPropertyAnimation(self, b"pos")
-        slide.setStartValue(end + QPoint(0, 18))
+        slide.setStartValue(end + QPoint(0, 10))
         slide.setEndValue(end)
+        slide.setDuration(260)
+        slide.setEasingCurve(QEasingCurve.OutQuad)
+
         group = QParallelAnimationGroup(self)
-        for a in (fade, slide):
-            a.setDuration(520)
-            a.setEasingCurve(QEasingCurve.OutCubic)
-            group.addAnimation(a)
+        group.addAnimation(fade)
+        group.addAnimation(slide)
         group.finished.connect(lambda: self.setWindowOpacity(self.look.opacity))
         self._intro = group
         group.start()

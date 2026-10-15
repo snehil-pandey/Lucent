@@ -68,7 +68,7 @@ class Splash(QWidget):
 
     def _tick(self, v):
         self._t = float(v)
-        if not self._handed and self._t >= 0.84:
+        if not self._handed and self._t >= 0.96:
             self._handed = True
             self.handoff.emit()
         self.update()

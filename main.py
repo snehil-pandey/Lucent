@@ -3,8 +3,9 @@ import sys
 
 from PySide6.QtCore import QCoreApplication, Qt
 
-# Must be set before the QApplication exists (needed by QtWebEngine).
+# Must be set before the QApplication exists (needed by QtWebEngine & high-framerate rendering).
 QCoreApplication.setAttribute(Qt.AA_ShareOpenGLContexts)
+QCoreApplication.setAttribute(Qt.AA_DontCreateNativeWidgetSiblings)
 
 from PySide6.QtWidgets import QApplication  # noqa: E402
 
@@ -21,8 +22,15 @@ def main() -> int:
     app.setStyle("Fusion")
     app.setWindowIcon(app_icon())
 
-    manager = Manager(sys.argv[1:])
-    manager.start()
+    args = sys.argv[1:]
+    skip_splash = ("--quick" in args) or ("--no-splash" in args)
+    clean_args = [a for a in args if a not in ("--quick", "--no-splash")]
+
+    manager = Manager(clean_args)
+    if skip_splash:
+        manager._launch()
+    else:
+        manager.start()
     return app.exec()
 
 
