@@ -1,7 +1,7 @@
 """One Lucent overlay window. Open as many as you like; each has its own look."""
 from PySide6.QtCore import (QEasingCurve, QEvent, QParallelAnimationGroup,
                             QPoint, QPropertyAnimation, Qt, QTimer, Signal)
-from PySide6.QtGui import QColor, QKeySequence, QPainter, QShortcut
+from PySide6.QtGui import QColor, QGuiApplication, QKeySequence, QPainter, QShortcut
 from PySide6.QtWidgets import QFileDialog, QVBoxLayout, QWidget
 
 from . import theme, winapi
