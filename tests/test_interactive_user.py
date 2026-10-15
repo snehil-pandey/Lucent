@@ -57,37 +57,55 @@ def run_interactive_suite():
         "Verify that the Lucent window is visible on your screen, floating on top, and partially translucent with a sleek glowing border."
     )
 
-    # Step 2: Window Collapse
+    # Step 2: Alt + Left Click Dragging
+    prompt(
+        "2. Alt + Left-Click Drag (Reposition Anywhere)",
+        "Hold the 'Alt' key on your keyboard and Left-Click + Drag from anywhere inside the Lucent window.\n\n"
+        "Verify that the entire window moves smoothly under your cursor without needing to grab the titlebar."
+    )
+
+    # Step 3: Quick Snapping (Alt+1 to Alt+5)
+    overlay.snap_to("top-right")
+    prompt(
+        "3. Quick Snap Layout (Alt + 4 -> Top-Right)",
+        "The window has automatically snapped to the Top-Right corner.\n\n"
+        "Try pressing Alt+1 (Bottom-Left), Alt+2 (Bottom-Right), or Alt+5 (Center). Confirm the window snaps reliably."
+    )
+
+    # Step 4: Window Collapse
     overlay.toggle_collapse()
     prompt(
-        "2. Window Collapse / Shading",
-        "The window should now be collapsed into ONLY its titlebar strip. Can you confirm it shrank cleanly without errors?"
+        "4. Window Collapse / Shading (Ctrl+K)",
+        "The window should now be collapsed into ONLY its 36px titlebar strip.\n\n"
+        "Verify that the body vanished and the window shaded upwards."
     )
     overlay.toggle_collapse()
 
-    # Step 3: Invert / Dark Mode Filter
+    # Step 5: Invert / Dark Mode Filter
     overlay.set_invert_colors(True)
     prompt(
-        "3. Invert / High Contrast Mode",
-        "Invert mode is now turned ON. The titlebar '◐' button should highlight blue. Can you confirm the visual invert indicator?"
+        "5. Invert / High Contrast Mode (Ctrl+I)",
+        "Invert mode is now turned ON. The titlebar '◐' button should highlight blue.\n\n"
+        "Verify that the visual invert indicator is active and readable."
     )
     overlay.set_invert_colors(False)
 
-    # Step 4: Click-through mode test
+    # Step 6: Click-through mode test
     overlay.set_click_through(True)
     prompt(
-        "4. Click-Through (Ghost Mode) Pass-Through",
+        "6. Click-Through (Ghost Mode) Pass-Through",
         "Click-Through mode is now ENABLED! Mouse clicks on the overlay body should pass straight through to whatever window is behind it.\n\n"
-        "Try pressing Ctrl+Alt+M anywhere on your keyboard to toggle it back, or confirm if clicks pass through."
+        "Press Ctrl+Alt+M on your keyboard anywhere in Windows to toggle it back, or confirm if clicks pass through."
     )
     overlay.set_click_through(False)
 
-    # Step 5: Screen capture resistance
+    # Step 7: Screen capture resistance
     if winapi.WIN:
         overlay.set_hide_from_capture(True)
         prompt(
-            "5. Screen Capture Protection (WDA_EXCLUDEFROMCAPTURE)",
-            "Protection is enabled. If you take a Windows screenshot (Win+Shift+S) over this window, it should be excluded or transparent in the snippet."
+            "7. Screen Capture Protection (WDA_EXCLUDEFROMCAPTURE)",
+            "Screen protection is enabled.\n\n"
+            "Take a quick Windows screenshot snippet (Win + Shift + S) over this window. Confirm it is invisible or transparent in the snippet."
         )
 
     overlay.close()
