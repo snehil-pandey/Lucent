@@ -35,6 +35,19 @@ class TextViewer(Viewer):
         lay.setContentsMargins(0, 0, 0, 0)
         lay.addWidget(self._edit)
 
+    def apply_theme(self, hue):
+        from .. import theme
+        acc = theme.accent(hue).name()
+        self._edit.setStyleSheet(f"""
+            QPlainTextEdit {{
+                background: transparent;
+                color: #e6eefc;
+                padding: 10px;
+                selection-background-color: {acc};
+            }}
+            {theme.scrollbar_stylesheet(hue)}
+        """)
+
     def load(self, source):
         with open(source, "rb") as f:
             data = f.read(MAX_BYTES)

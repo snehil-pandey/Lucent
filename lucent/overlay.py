@@ -275,7 +275,10 @@ class OverlayWindow(QWidget):
             self.body.setStyleSheet("QWidget#body { background: transparent; }")
             # For WebEngine or generic widgets, we can apply an invert stylesheet filter or theme update
             if hasattr(self._viewer, "_edit"):
-                self._viewer._edit.setStyleSheet("QPlainTextEdit { background: rgba(10, 10, 15, 0.90); color: #f8fafc; padding: 8px; }")
+                self._viewer._edit.setStyleSheet(f"""
+                    QPlainTextEdit {{ background: rgba(10, 10, 15, 0.90); color: #f8fafc; padding: 10px; }}
+                    {theme.scrollbar_stylesheet(self.look.hue)}
+                """)
             elif hasattr(self._viewer, "_view") and hasattr(self._viewer._view, "setPalette"):
                 pal = self._viewer._view.palette()
                 pal.setColor(pal.ColorRole.Base, QColor(20, 20, 25))
@@ -283,12 +286,13 @@ class OverlayWindow(QWidget):
                 self._viewer._view.setPalette(pal)
         else:
             if hasattr(self._viewer, "_edit"):
-                self._viewer._edit.setStyleSheet("QPlainTextEdit { background: transparent; color: #e6eefc; padding: 8px; }")
+                self._viewer.apply_theme(self.look.hue)
             elif hasattr(self._viewer, "_view") and hasattr(self._viewer._view, "setPalette"):
                 self._viewer.apply_theme(self.look.hue)
 
     def _retheme(self):
         h = self.look.hue
+        self.setStyleSheet(theme.scrollbar_stylesheet(h))
         self.titlebar.apply_theme(h)
         self.titlebar.set_inverted(self.look.invert_colors)
         self.popup.apply_theme(h)

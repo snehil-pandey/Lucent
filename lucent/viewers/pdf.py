@@ -44,6 +44,7 @@ class PdfViewer(Viewer):
         pal = self._view.palette()
         pal.setColor(QPalette.Dark, theme.background(hue).lighter(130))
         self._view.setPalette(pal)
+        self._view.setStyleSheet(theme.scrollbar_stylesheet(hue))
 
     def fit(self):
         self._view.setZoomMode(QPdfView.ZoomMode.FitToWidth)
