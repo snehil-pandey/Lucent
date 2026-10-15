@@ -9,6 +9,9 @@ from lucent.manager import Manager
 
 
 def test_hub_window_instantiation_and_cards(qtbot):
+    from lucent.config import save_overlay_registry
+    save_overlay_registry([])
+
     mgr = Manager([])
     w1 = mgr.spawn(None)
     w2 = mgr.spawn(None)
@@ -20,9 +23,11 @@ def test_hub_window_instantiation_and_cards(qtbot):
 
     assert len(hub._item_widgets) == 2
     item1 = hub._item_widgets[0]
-    assert "Overlay #1" in item1.lbl_title.text()
+    assert "Overlay" in item1.lbl_title.text()
+    assert item1.lbl_tag.text() == "ACTIVE"
     item2 = hub._item_widgets[1]
-    assert "Overlay #2" in item2.lbl_title.text()
+    assert "Overlay" in item2.lbl_title.text()
+    assert item2.lbl_tag.text() == "ACTIVE"
 
     # Test actions widget hidden initially, shown on enterEvent
     assert not item1.actions_widget.isVisible()
@@ -35,7 +40,7 @@ def test_hub_window_instantiation_and_cards(qtbot):
     hub.search_box.setText("NonExistentXYZ")
     assert not item1.isVisible()
     assert not item2.isVisible()
-    hub.search_box.setText("Overlay #1")
+    hub.search_box.setText(item1.lbl_title.text())
     assert item1.isVisible()
     assert not item2.isVisible()
 

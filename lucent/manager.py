@@ -126,7 +126,9 @@ class Manager(QObject):
                             click_through=bool(raw_look.get("click_through", False)),
                             invert_colors=bool(raw_look.get("invert_colors", False)),
                         )
-                    win = self.spawn(src, look=custom_look)
+                    oid = item.get("id")
+                    name = item.get("name")
+                    win = self.spawn(src, look=custom_look, overlay_id=oid, name=name)
                     geom = item.get("geometry")
                     if geom and len(geom) == 4:
                         win.setGeometry(QRect(*geom))
@@ -149,6 +151,8 @@ class Manager(QObject):
                 "invert_colors": w.look.invert_colors,
             }
             session_data.append({
+                "id": w.overlay_id,
+                "name": w.custom_name,
                 "source": getattr(w, "current_source", None),
                 "geometry": [g.x(), g.y(), g.width(), g.height()],
                 "look": look_dict,
@@ -158,7 +162,7 @@ class Manager(QObject):
     def show_hub(self, focus_input: bool = False):
         if self._hub is None:
             self._hub = HubWindow(self)
-            self._hub.spawn_requested.connect(lambda src: self.spawn(src))
+            self._hub.spawn_requested.connect(lambda src, look, oid, name: self.spawn(src, look=look, overlay_id=oid, name=name))
             self._hub.bring_front_requested.connect(self._bring_overlay_to_front)
             self._hub.toggle_collapse_requested.connect(lambda w: (w.toggle_collapse(), self._hub.refresh(self._windows)))
             self._hub.toggle_click_through_requested.connect(lambda w: (w.toggle_click_through(), self._hub.refresh(self._windows)))
@@ -177,11 +181,11 @@ class Manager(QObject):
             win.raise_()
             win.activateWindow()
 
-    def spawn(self, source=None, origin=None, look=None):
+    def spawn(self, source=None, origin=None, look=None, overlay_id=None, name=None):
         if look is None:
             look = copy(origin.look if origin else self._look)
         index = len(self._windows) + 1
-        win = OverlayWindow(look, source, index=index)
+        win = OverlayWindow(look, source, index=index, overlay_id=overlay_id, name=name)
         win.closed.connect(self._on_closed)
         win.new_overlay_requested.connect(lambda s: self.show_hub(focus_input=True))
         win.hub_requested.connect(self.show_hub)

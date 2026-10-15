@@ -6,7 +6,7 @@ from PySide6.QtGui import (QColor, QCursor, QFont, QGuiApplication, QKeySequence
 from PySide6.QtWidgets import QFileDialog, QVBoxLayout, QWidget
 
 from . import theme, winapi
-from .config import Look, add_recent_source, save_look
+from .config import Look, add_recent_source, save_look, upsert_overlay_record
 from .icon import app_icon, draw_moon
 from .settings_popup import SettingsPopup
 from .sources import normalize_source
@@ -24,19 +24,22 @@ class OverlayWindow(QWidget):
     new_overlay_requested = Signal(object)   # a source to open, or None for an empty one
     hub_requested = Signal()
 
-    def __init__(self, look: Look, source=None, index: int = 1):
+    def __init__(self, look: Look, source=None, index: int = 1, overlay_id: str = None, name: str = None):
         super().__init__()
         self.look = look
         self.index = index
+        self.overlay_id = overlay_id or f"overlay_{index}_{id(self)}"
+        self.custom_name = name or f"Overlay #{self.index}"
         self.current_source = None
         self._viewer = None
         self._intro = None
         self._was_maximized = False
         self._drag_pos = None
 
-        self.setWindowTitle(f"Lucent #{self.index}")
+        self.setWindowTitle(f"Lucent — {self.custom_name}")
         self.setWindowIcon(app_icon())
         self.setAttribute(Qt.WA_DeleteOnClose)
+        self.setAttribute(Qt.WA_Hover, True)
         self.setMouseTracking(True)
         self.setAcceptDrops(True)
         self.setMinimumSize(380, 260)
@@ -47,6 +50,9 @@ class OverlayWindow(QWidget):
         root.setContentsMargins(EDGE, EDGE, EDGE, EDGE)
         root.setSpacing(0)
         self.titlebar = TitleBar(self)
+        self.titlebar.set_title(self.custom_name)
+        self.titlebar.setVisible(False)  # Hidden by default: plain box! Appears on hover
+
         self.body = QWidget(self)
         self.body_layout = QVBoxLayout(self.body)
         self.body_layout.setContentsMargins(0, 0, 0, 0)
@@ -243,12 +249,19 @@ class OverlayWindow(QWidget):
         if not self.look.click_through or not self.isVisible() or self._collapsed:
             return
         btn = self.titlebar.btn_ghost
-        if not btn.isVisible():
-            return
+        cursor_pos = QCursor.pos()
+
+        # Check if cursor is over overlay window
+        win_rect = self.geometry()
+        is_over_win = win_rect.contains(cursor_pos)
+        if is_over_win and not self.titlebar.isVisible():
+            self.titlebar.setVisible(True)
+        elif not is_over_win and self.titlebar.isVisible() and not self.popup.isVisible():
+            self.titlebar.setVisible(False)
+
         # Convert button global rect to check if cursor is strictly over the ghost button
         btn_top_left = btn.mapToGlobal(QPoint(0, 0))
         btn_rect = QRect(btn_top_left, btn.size())
-        cursor_pos = QCursor.pos()
 
         is_over_btn = btn_rect.contains(cursor_pos)
         if is_over_btn != self._ghost_btn_active:
@@ -268,6 +281,7 @@ class OverlayWindow(QWidget):
             return
         self.current_source = source
         add_recent_source(source)
+        self.persist_state()
         try:
             viewer = create_viewer(source)
         except Exception as exc:
@@ -292,7 +306,7 @@ class OverlayWindow(QWidget):
 
     def _on_title(self, title):
         display_title = title if title else f"Overlay #{self.index}"
-        self.setWindowTitle(f"{display_title} — Lucent")
+        self.setWindowTitle(f"Lucent — {display_title}")
         self.titlebar.set_title(display_title)
 
     # look ---------------------------------------------------------------
@@ -304,12 +318,32 @@ class OverlayWindow(QWidget):
         self.setWindowOpacity(self.look.opacity)
         self.popup.sync(self.look)
         save_look(self.look)
+        self.persist_state()
+
+    def persist_state(self):
+        g = self.geometry()
+        look_dict = {
+            "opacity": self.look.opacity,
+            "hue": self.look.hue,
+            "on_top": self.look.on_top,
+            "hide_from_capture": self.look.hide_from_capture,
+            "click_through": self.look.click_through,
+            "invert_colors": self.look.invert_colors,
+        }
+        upsert_overlay_record(
+            overlay_id=self.overlay_id,
+            name=self.custom_name,
+            source=self.current_source or "",
+            look=look_dict,
+            geometry=[g.x(), g.y(), g.width(), g.height()],
+        )
 
     def set_hue(self, hue: int):
         self.look.hue = hue % 360
         self._retheme()
         self.popup.sync(self.look)
         save_look(self.look)
+        self.persist_state()
 
     def set_on_top(self, on: bool):
         self.look.on_top = on
@@ -318,11 +352,13 @@ class OverlayWindow(QWidget):
         if visible:
             self.show()
         save_look(self.look)
+        self.persist_state()
 
     def set_hide_from_capture(self, hidden: bool):
         self.look.hide_from_capture = hidden
         self._apply_capture()
         save_look(self.look)
+        self.persist_state()
 
     def _apply_capture(self):
         winapi.set_capture_hidden(self, self.look.hide_from_capture)
@@ -336,6 +372,7 @@ class OverlayWindow(QWidget):
         self.titlebar.set_inverted(inverted)
         self._apply_inversion()
         save_look(self.look)
+        self.persist_state()
 
     def _apply_inversion(self):
         if not self._viewer:
@@ -520,6 +557,7 @@ class OverlayWindow(QWidget):
     def closeEvent(self, e):
         self._stop_ghost_hover_tracker()
         self._unregister_hotkey()
+        self.persist_state()
         save_look(self.look)
         self.closed.emit(self)
         super().closeEvent(e)
@@ -585,8 +623,16 @@ class OverlayWindow(QWidget):
             return
         super().mouseReleaseEvent(e)
 
+    def enterEvent(self, e):
+        if not self._collapsed:
+            self.titlebar.setVisible(True)
+        super().enterEvent(e)
+
     def leaveEvent(self, e):
         self.unsetCursor()
+        # Keep titlebar visible if settings popup or child widget has focus/active
+        if not self._collapsed and not self.popup.isVisible():
+            self.titlebar.setVisible(False)
         super().leaveEvent(e)
 
     # drag & drop --------------------------------------------------------

@@ -85,3 +85,49 @@ def load_session() -> list:
         return json.loads(raw)
     except Exception:
         return []
+
+
+# Complete Overlay Registry (all past & present overlays) -------------
+def load_overlay_registry() -> list:
+    s = _settings()
+    raw = s.value("overlay_registry", "[]")
+    try:
+        return json.loads(raw)
+    except Exception:
+        return []
+
+
+def save_overlay_registry(items: list) -> None:
+    s = _settings()
+    s.setValue("overlay_registry", json.dumps(items))
+
+
+def upsert_overlay_record(overlay_id: str, name: str, source: str, look: dict, geometry: list = None) -> list:
+    items = load_overlay_registry()
+    found = False
+    for it in items:
+        if it.get("id") == overlay_id:
+            it["name"] = name
+            it["source"] = source
+            it["look"] = look
+            if geometry:
+                it["geometry"] = geometry
+            found = True
+            break
+    if not found:
+        items.insert(0, {
+            "id": overlay_id,
+            "name": name,
+            "source": source,
+            "look": look,
+            "geometry": geometry or [100, 100, 940, 640],
+        })
+    save_overlay_registry(items)
+    return items
+
+
+def delete_overlay_record(overlay_id: str) -> list:
+    items = load_overlay_registry()
+    items = [it for it in items if it.get("id") != overlay_id]
+    save_overlay_registry(items)
+    return items
