@@ -1,0 +1,152 @@
+"""Owns the splash and every open overlay."""
+from copy import copy
+
+from PySide6.QtCore import QObject, QPoint, QRect
+from PySide6.QtGui import QAction, QGuiApplication
+from PySide6.QtWidgets import QMenu, QSystemTrayIcon
+
+from .config import (get_recent_sources, load_look, load_session,
+                     save_session)
+from .icon import app_icon
+from .overlay import OverlayWindow
+from .splash import Splash
+
+
+class Manager(QObject):
+    def __init__(self, sources, parent=None):
+        super().__init__(parent)
+        self._sources = list(sources)
+        self._windows = []
+        self._look = load_look()
+        self._splash = None
+        self._launched = False
+        self._tray = None
+        self._menu = None
+        self._init_tray()
+        app = QGuiApplication.instance()
+        if app:
+            app.aboutToQuit.connect(self._on_app_quit)
+
+    def _init_tray(self):
+        if not QSystemTrayIcon.isSystemTrayAvailable():
+            return
+        tray = QSystemTrayIcon(app_icon(), self)
+        tray.setToolTip("Lucent (Global: Ctrl+Alt+M to toggle click-through)")
+        self._menu = QMenu()
+        self._menu.aboutToShow.connect(self._rebuild_tray_menu)
+        tray.setContextMenu(self._menu)
+        tray.activated.connect(self._on_tray_activated)
+        tray.show()
+        self._tray = tray
+
+    def _rebuild_tray_menu(self):
+        m = self._menu
+        m.clear()
+
+        act_toggle_ghost = QAction("Toggle Click-Through (Ctrl+Alt+M)", m)
+        act_toggle_ghost.triggered.connect(self.toggle_all_click_through)
+        m.addAction(act_toggle_ghost)
+
+        act_new = QAction("New Overlay (Ctrl+N)", m)
+        act_new.triggered.connect(lambda: self.spawn())
+        m.addAction(act_new)
+
+        # Recent Files / Links submenu
+        recent = get_recent_sources()
+        if recent:
+            rec_menu = m.addMenu("Open Recent")
+            for item in recent:
+                display_name = item
+                if len(display_name) > 45:
+                    display_name = display_name[:20] + "..." + display_name[-22:]
+                act = QAction(display_name, rec_menu)
+                act.triggered.connect(lambda checked=False, src=item: self.spawn(src))
+                rec_menu.addAction(act)
+
+        m.addSeparator()
+
+        act_bring_front = QAction("Bring All to Front", m)
+        act_bring_front.triggered.connect(self.bring_all_to_front)
+        m.addAction(act_bring_front)
+
+        m.addSeparator()
+
+        act_quit = QAction("Quit Lucent", m)
+        act_quit.triggered.connect(QGuiApplication.instance().quit)
+        m.addAction(act_quit)
+
+    def _on_tray_activated(self, reason):
+        if reason == QSystemTrayIcon.Trigger:
+            self.toggle_all_click_through()
+
+    def toggle_all_click_through(self):
+        if not self._windows:
+            return
+        any_ghost = any(w.look.click_through for w in self._windows)
+        for w in self._windows:
+            w.set_click_through(not any_ghost)
+
+    def bring_all_to_front(self):
+        for w in self._windows:
+            w.showNormal()
+            w.raise_()
+            w.activateWindow()
+
+    def start(self):
+        self._splash = Splash()
+        self._splash.handoff.connect(self._launch)
+        self._splash.play()
+
+    def _launch(self):
+        if self._launched:
+            return
+        self._launched = True
+        if self._sources:
+            for src in self._sources:
+                self.spawn(src)
+        else:
+            saved = load_session()
+            if saved:
+                for item in saved:
+                    src = item.get("source")
+                    win = self.spawn(src)
+                    geom = item.get("geometry")
+                    if geom and len(geom) == 4:
+                        win.setGeometry(QRect(*geom))
+            else:
+                self.spawn(None)
+
+    def _on_app_quit(self):
+        session_data = []
+        for w in self._windows:
+            g = w.geometry()
+            session_data.append({
+                "source": getattr(w, "current_source", None),
+                "geometry": [g.x(), g.y(), g.width(), g.height()]
+            })
+        save_session(session_data)
+
+    def spawn(self, source=None, origin=None):
+        look = copy(origin.look if origin else self._look)
+        win = OverlayWindow(look, source)
+        win.closed.connect(self._on_closed)
+        win.new_overlay_requested.connect(lambda s, w=win: self.spawn(s, w))
+
+        if origin:
+            full = origin.isMaximized() or origin.isFullScreen()
+            g = origin.normalGeometry() if full else origin.geometry()
+            win.resize(g.size())
+            win.move(g.topLeft() + QPoint(42, 42))
+        else:
+            geo = QGuiApplication.primaryScreen().availableGeometry()
+            n = len(self._windows)
+            c = geo.center() - QPoint(win.width() // 2, win.height() // 2)
+            win.move(c + QPoint(n * 36, n * 36))
+
+        self._windows.append(win)
+        win.show_animated()
+        return win
+
+    def _on_closed(self, win):
+        if win in self._windows:
+            self._windows.remove(win)
