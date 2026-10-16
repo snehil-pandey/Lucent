@@ -338,7 +338,7 @@ class InstallerWindow(QWidget):
         lbl_title = QLabel("Lucent Setup")
         lbl_title.setObjectName("Title")
         lbl_desc = QLabel("Install Lucent transparent overlay viewer with custom directories and integrations.")
-        lbl_desc.setStyleSheet("color: #94a3b8; font-size: 12px;")
+        lbl_desc.setStyleSheet("color: #94a3b8; font-size: 12px; background: transparent;")
         text_vlay.addWidget(lbl_title)
         text_vlay.addWidget(lbl_desc)
         h_lay.addLayout(text_vlay, 1)
@@ -386,7 +386,7 @@ class InstallerWindow(QWidget):
 
         # Progress
         self.status_lbl = QLabel("")
-        self.status_lbl.setStyleSheet("color: #38bdf8; font-size: 12px;")
+        self.status_lbl.setStyleSheet("color: #38bdf8; font-size: 12px; background: transparent;")
         layout.addWidget(self.status_lbl)
 
         self.progress = QProgressBar()
