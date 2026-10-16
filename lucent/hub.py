@@ -2,9 +2,12 @@
 Lists all overlays created (both currently Active and Inactive/Saved in past),
 displays status tags, supports inline renaming, deletion, opening/spawning,
 and includes an input bar aligned to create overlays from a URL, local file, or clipboard.
+All styles strictly follow the theme hue system with frameless title bar.
+Includes default settings corner, icon customization, and sticky notes creation.
 """
-from PySide6.QtCore import QPoint, QRect, QSize, Qt, Signal
-from PySide6.QtGui import QColor, QFont, QGuiApplication, QIcon, QPainter
+import os
+from PySide6.QtCore import QPoint, QRect, QRectF, QSize, Qt, Signal
+from PySide6.QtGui import QColor, QFont, QGuiApplication, QIcon, QPainter, QPixmap
 from PySide6.QtWidgets import (
     QFileDialog,
     QFrame,
@@ -19,14 +22,17 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from . import theme
+from . import theme, winapi
 from .config import (
     Look,
     delete_overlay_record,
+    load_look,
     load_overlay_registry,
+    save_look,
     upsert_overlay_record,
 )
-from .icon import app_icon, draw_moon
+from .icon import app_icon, draw_shape_icon, render_overlay_pixmap
+from .settings_popup import SettingsPopup
 from .titlebar import GLYPH
 from .viewers import FILE_FILTER
 
@@ -43,10 +49,11 @@ class OverlayListItem(QFrame):
     rename_requested = Signal(str, str)  # overlay_id, new_name
     delete_requested = Signal(str)  # overlay_id
 
-    def __init__(self, record: dict, live_overlay=None, parent=None):
+    def __init__(self, record: dict, live_overlay=None, parent=None, hue: int = 215):
         super().__init__(parent)
         self.record = record
         self.overlay = live_overlay  # OverlayWindow instance if currently open, else None
+        self._hue = hue
         self.setAttribute(Qt.WA_Hover, True)
         self.setObjectName("OverlayListItem")
         self.setFixedHeight(68)
@@ -72,10 +79,9 @@ class OverlayListItem(QFrame):
         name = self.record.get("name") or "Unnamed Overlay"
         self.lbl_title = QLabel(name)
         self.lbl_title.setObjectName("ItemTitle")
-        self.lbl_title.setStyleSheet("font-weight: 600; font-size: 10pt; color: #f8fafc;")
         title_row.addWidget(self.lbl_title)
 
-        # Status Tag: Active (green) vs Saved (slate)
+        # Status Tag: Active (accent) vs Saved (neutral low-alpha white)
         self.lbl_tag = QLabel()
         self._update_tag()
         title_row.addWidget(self.lbl_tag)
@@ -85,7 +91,7 @@ class OverlayListItem(QFrame):
 
         src = self.record.get("source", "")
         if not src:
-            src_display = "Empty Canvas"
+            src_display = "Empty Canvas / Sticky Note"
         elif len(src) > 40:
             src_display = src[:20] + "..." + src[-17:]
         else:
@@ -93,7 +99,6 @@ class OverlayListItem(QFrame):
 
         self.lbl_sub = QLabel(src_display)
         self.lbl_sub.setObjectName("ItemSubtitle")
-        self.lbl_sub.setStyleSheet("font-size: 8.5pt; color: #94a3b8;")
         info_lay.addWidget(self.lbl_sub)
 
         lay.addLayout(info_lay, 1)
@@ -105,13 +110,13 @@ class OverlayListItem(QFrame):
         actions_lay.setSpacing(4)
 
         if self.overlay is not None:
-            # Controls for Active Overlays
-            self.btn_front = self._make_btn("👁", "Bring Overlay to Front")
-            self.btn_ghost = self._make_btn(GLYPH["click_through"], "Toggle Click-Through / Ghost Mode")
-            self.btn_collapse = self._make_btn(GLYPH["collapse"], "Toggle Collapse / Expand")
-            self.btn_settings = self._make_btn(GLYPH["settings"], "Overlay Settings")
-            self.btn_rename = self._make_btn("✎", "Rename Overlay")
-            self.btn_close = self._make_btn(GLYPH["close"], "Close Window", is_close=True)
+            # Controls for Active Overlays (using Segoe MDL2 Assets glyphs with fallbacks)
+            self.btn_front = self._make_btn(GLYPH.get("view", "👁"), "Bring Overlay to Front")
+            self.btn_ghost = self._make_btn(GLYPH.get("click_through", "👻"), "Toggle Click-Through / Ghost Mode")
+            self.btn_collapse = self._make_btn(GLYPH.get("collapse", "▲"), "Toggle Collapse / Expand")
+            self.btn_settings = self._make_btn(GLYPH.get("settings", "⚙"), "Overlay Settings")
+            self.btn_rename = self._make_btn(GLYPH.get("edit", "✎"), "Rename Overlay")
+            self.btn_close = self._make_btn(GLYPH.get("close", "✕"), "Close Window", is_close=True)
 
             self.btn_front.clicked.connect(lambda: self.bring_front_requested.emit(self.overlay))
             self.btn_ghost.clicked.connect(lambda: self.toggle_click_through_requested.emit(self.overlay))
@@ -128,9 +133,9 @@ class OverlayListItem(QFrame):
             actions_lay.addWidget(self.btn_close)
         else:
             # Controls for Inactive / Saved Overlays
-            self.btn_open = self._make_btn("▶", "Open / Restore Overlay")
-            self.btn_rename = self._make_btn("✎", "Rename Overlay")
-            self.btn_delete = self._make_btn("🗑", "Delete Overlay Record", is_close=True)
+            self.btn_open = self._make_btn(GLYPH.get("play", "▶"), "Open / Restore Overlay")
+            self.btn_rename = self._make_btn(GLYPH.get("edit", "✎"), "Rename Overlay")
+            self.btn_delete = self._make_btn(GLYPH.get("delete", "✕"), "Delete Overlay Record", is_close=True)
 
             self.btn_open.clicked.connect(lambda: self.open_requested.emit(self.record))
             self.btn_rename.clicked.connect(self._prompt_rename)
@@ -142,36 +147,43 @@ class OverlayListItem(QFrame):
 
         lay.addWidget(self.actions_widget)
         self.actions_widget.setVisible(False)
+        self.apply_theme(self._hue)
+
+    def apply_theme(self, hue: int):
+        self._hue = hue
+        self._update_icon()
+        self._update_tag()
         self._apply_idle_style()
 
     def _update_tag(self):
+        acc = theme.accent(self._hue).name()
         if self.overlay is not None:
             self.lbl_tag.setText("ACTIVE")
-            self.lbl_tag.setStyleSheet("""
-                QLabel {
-                    background: rgba(34, 197, 94, 0.18);
-                    color: #4ade80;
-                    border: 1px solid rgba(74, 222, 128, 0.35);
+            self.lbl_tag.setStyleSheet(f"""
+                QLabel {{
+                    background: rgba(255, 255, 255, 0.08);
+                    color: {acc};
+                    border: 1px solid {acc};
                     border-radius: 4px;
                     padding: 1px 6px;
                     font-size: 7.5pt;
                     font-weight: 700;
                     letter-spacing: 0.5px;
-                }
+                }}
             """)
         else:
             self.lbl_tag.setText("SAVED")
-            self.lbl_tag.setStyleSheet("""
-                QLabel {
-                    background: rgba(148, 163, 184, 0.12);
-                    color: #94a3b8;
-                    border: 1px solid rgba(148, 163, 184, 0.25);
+            self.lbl_tag.setStyleSheet(f"""
+                QLabel {{
+                    background: rgba(255, 255, 255, 0.04);
+                    color: {theme.TEXT_MUTED};
+                    border: 1px solid rgba(255, 255, 255, 0.12);
                     border-radius: 4px;
                     padding: 1px 6px;
                     font-size: 7.5pt;
                     font-weight: 600;
                     letter-spacing: 0.5px;
-                }
+                }}
             """)
 
     def _prompt_rename(self):
@@ -207,45 +219,73 @@ class OverlayListItem(QFrame):
         return btn
 
     def _update_icon(self):
-        from PySide6.QtGui import QPixmap
         pm = QPixmap(36, 36)
         pm.fill(Qt.transparent)
         p = QPainter(pm)
         p.setRenderHint(QPainter.Antialiasing)
 
-        hue = 215
+        hue = self._hue
+        icon_name = "moon"
+        icon_file = None
         if self.overlay:
             hue = self.overlay.look.hue
+            icon_name = self.overlay.look.icon_name
+            icon_file = self.overlay.look.icon_file
         elif "look" in self.record and isinstance(self.record["look"], dict):
-            hue = self.record["look"].get("hue", 215)
+            hue = self.record["look"].get("hue", self._hue)
+            icon_name = self.record["look"].get("icon_name", "moon")
+            icon_file = self.record["look"].get("icon_file", None)
 
         acc = theme.accent(hue)
         bg = theme.background(hue)
         p.setBrush(bg)
         p.setPen(acc)
-        p.drawRoundedRect(QRect(1, 1, 34, 34), 8, 8)
+        p.drawRoundedRect(QRect(1, 1, 34, 34), 4, 4)
 
-        draw_moon(p, QRect(5, 5, 24, 24), glow=0.1, opacity=0.9)
+        if icon_file and os.path.isfile(icon_file):
+            custom_pm = render_overlay_pixmap(24, icon_name, icon_file)
+            p.drawPixmap(6, 6, custom_pm)
+        else:
+            draw_shape_icon(p, QRectF(6, 6, 24, 24), shape=icon_name, glow=0.1, opacity=0.9)
         p.end()
         self.lbl_icon.setPixmap(pm)
 
     def _apply_idle_style(self):
-        self.setStyleSheet("""
-            QFrame#OverlayListItem {
-                background: rgba(255, 255, 255, 0.03);
-                border: 1px solid rgba(255, 255, 255, 0.07);
-                border-radius: 8px;
-            }
+        self.setStyleSheet(f"""
+            QFrame#OverlayListItem {{
+                background: rgba(255, 255, 255, 0.04);
+                border: 1px solid rgba(255, 255, 255, 0.10);
+                border-radius: 4px;
+            }}
+            QLabel#ItemTitle {{
+                color: {theme.TEXT};
+                font: 600 9.5pt "Segoe UI";
+            }}
+            QLabel#ItemSubtitle {{
+                color: {theme.TEXT_MUTED};
+                font: 8.5pt "Segoe UI";
+            }}
+            {theme.toolbutton_stylesheet()}
         """)
 
     def enterEvent(self, e):
         self.actions_widget.setVisible(True)
-        self.setStyleSheet("""
-            QFrame#OverlayListItem {
+        acc = theme.accent(self._hue).name()
+        self.setStyleSheet(f"""
+            QFrame#OverlayListItem {{
                 background: rgba(255, 255, 255, 0.08);
-                border: 1px solid rgba(255, 255, 255, 0.20);
-                border-radius: 8px;
-            }
+                border: 1px solid {acc};
+                border-radius: 4px;
+            }}
+            QLabel#ItemTitle {{
+                color: {theme.TEXT};
+                font: 600 9.5pt "Segoe UI";
+            }}
+            QLabel#ItemSubtitle {{
+                color: {theme.TEXT_MUTED};
+                font: 8.5pt "Segoe UI";
+            }}
+            {theme.toolbutton_stylesheet()}
         """)
         if e:
             super().enterEvent(e)
@@ -271,7 +311,7 @@ class HubWindow(QWidget):
     """Main App Window: Complete Overlay Manager listing all past & present overlays,
     with an aligned input bar to create new overlays and full per-overlay customization."""
 
-    spawn_requested = Signal(object, object, str, str)  # source, look, overlay_id, name
+    spawn_requested = Signal(object, object, str, str, object)  # source, look, overlay_id, name, geometry
     bring_front_requested = Signal(object)
     toggle_collapse_requested = Signal(object)
     toggle_click_through_requested = Signal(object)
@@ -280,192 +320,293 @@ class HubWindow(QWidget):
     def __init__(self, manager, parent=None):
         super().__init__(parent)
         self.manager = manager
+        self.default_look = load_look()
+        self._hue = self.default_look.hue
         self.setObjectName("HubWindow")
-        self.setWindowTitle("Lucent — All Overlays")
+        self.setWindowTitle("Lucent — Overlays")
         self.setWindowIcon(app_icon())
+        self.setWindowFlags(Qt.Window | Qt.FramelessWindowHint)
         self.resize(440, 600)
         self.setMinimumSize(380, 440)
 
-        # Sleek dark theme matching Lucent aesthetic
-        self.setStyleSheet(f"""
-            QWidget#HubWindow {{
-                background: #0f1218;
-                color: #e2e8f0;
-            }}
-            QScrollArea {{
-                background: transparent;
-                border: none;
-            }}
-            QScrollBar:vertical {{
-                background: transparent;
-                width: 6px;
-                margin: 0px;
-            }}
-            QScrollBar::handle:vertical {{
-                background: rgba(255, 255, 255, 0.20);
-                min-height: 20px;
-                border-radius: 3px;
-            }}
-            QScrollBar::handle:vertical:hover {{
-                background: rgba(255, 255, 255, 0.40);
-            }}
-            QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {{
-                height: 0px;
-            }}
-            QToolButton#ItemBtn, QToolButton#ItemBtnClose {{
-                background: transparent;
-                border: none;
-                border-radius: 4px;
-                color: #cbd5e1;
-                font-family: "Segoe MDL2 Assets";
-                font-size: 10pt;
-            }}
-            QToolButton#ItemBtn:hover {{
-                background: rgba(255, 255, 255, 0.15);
-                color: white;
-            }}
-            QToolButton#ItemBtnClose:hover {{
-                background: #e81123;
-                color: white;
-            }}
-            QPushButton#ActionBtn {{
-                background: #3b82f6;
-                color: white;
-                font-weight: 600;
-                font-size: 9.5pt;
-                border: none;
-                border-radius: 6px;
-                padding: 8px 16px;
-            }}
-            QPushButton#ActionBtn:hover {{
-                background: #2563eb;
-            }}
-            QToolButton#FileBtn {{
-                background: rgba(255, 255, 255, 0.08);
-                color: #f1f5f9;
-                font-size: 9.5pt;
-                border: 1px solid rgba(255, 255, 255, 0.14);
-                border-radius: 6px;
-                padding: 7px 12px;
-            }}
-            QToolButton#FileBtn:hover {{
-                background: rgba(255, 255, 255, 0.16);
-            }}
-            QLineEdit#UrlInputBox {{
-                background: rgba(255, 255, 255, 0.07);
-                color: #f8fafc;
-                border: 1px solid rgba(255, 255, 255, 0.16);
-                border-radius: 6px;
-                padding: 8px 12px;
-                font-size: 9.5pt;
-            }}
-            QLineEdit#UrlInputBox:focus {{
-                border: 1.5px solid #3b82f6;
-                background: rgba(255, 255, 255, 0.11);
-            }}
-            QLineEdit#SearchBox {{
-                background: rgba(255, 255, 255, 0.05);
-                color: #e2e8f0;
-                border: 1px solid rgba(255, 255, 255, 0.10);
-                border-radius: 6px;
-                padding: 6px 12px;
-                font-size: 8.5pt;
-            }}
-            QLineEdit#SearchBox:focus {{
-                border: 1px solid #3b82f6;
-                background: rgba(255, 255, 255, 0.08);
-            }}
-        """)
-
         root = QVBoxLayout(self)
-        root.setContentsMargins(18, 18, 18, 18)
-        root.setSpacing(14)
+        root.setContentsMargins(1, 1, 1, 1)
+        root.setSpacing(0)
 
-        # Header bar: Logo + App Title
-        header = QHBoxLayout()
-        header.setSpacing(10)
+        # Custom Frameless Titlebar
+        self.titlebar = QWidget(self)
+        self.titlebar.setObjectName("HubTitleBar")
+        self.titlebar.setFixedHeight(36)
+        title_lay = QHBoxLayout(self.titlebar)
+        title_lay.setContentsMargins(12, 0, 0, 0)
+        title_lay.setSpacing(8)
 
-        lbl_logo = QLabel()
-        lbl_logo.setPixmap(app_icon().pixmap(24, 24))
-        header.addWidget(lbl_logo)
+        logo = QLabel()
+        logo.setPixmap(app_icon().pixmap(18, 18))
+        self.lbl_title = QLabel("Lucent Overlays")
+        self.lbl_title.setObjectName("title")
 
-        lbl_header = QLabel("Lucent Overlays")
-        lbl_header.setStyleSheet("font-size: 13.5pt; font-weight: 700; color: #f8fafc;")
-        header.addWidget(lbl_header, 1)
+        # Default Settings Corner button
+        self.btn_default_settings = QToolButton(self.titlebar)
+        self.btn_default_settings.setText(GLYPH.get("settings", "⚙"))
+        self.btn_default_settings.setToolTip("App Default Settings (Theme, Transparency, Default Look)")
+        self.btn_default_settings.setObjectName("settings")
+        self.btn_default_settings.setFixedSize(36, 36)
+        self.btn_default_settings.setFocusPolicy(Qt.NoFocus)
 
-        root.addLayout(header)
+        self.btn_close = QToolButton(self.titlebar)
+        self.btn_close.setText(GLYPH.get("close", "✕"))
+        self.btn_close.setToolTip("Close Hub")
+        self.btn_close.setObjectName("close")
+        self.btn_close.setFixedSize(44, 36)
+        self.btn_close.setFocusPolicy(Qt.NoFocus)
+        self.btn_close.clicked.connect(self.close)
+
+        title_lay.addWidget(logo)
+        title_lay.addWidget(self.lbl_title)
+        title_lay.addStretch(1)
+        title_lay.addWidget(self.btn_default_settings)
+        title_lay.addWidget(self.btn_close)
+        root.addWidget(self.titlebar)
+
+        # Settings popup for Default Settings Corner
+        self.default_popup = SettingsPopup(self)
+        self.default_popup.sync(self.default_look)
+        self._wire_default_settings()
+
+        # Main Body
+        body = QWidget(self)
+        body.setObjectName("HubBody")
+        body_lay = QVBoxLayout(body)
+        body_lay.setContentsMargins(16, 14, 16, 14)
+        body_lay.setSpacing(12)
 
         # Input Card Container
-        input_container = QFrame(self)
-        input_container.setStyleSheet("""
-            QFrame {
-                background: rgba(255, 255, 255, 0.04);
-                border: 1px solid rgba(255, 255, 255, 0.08);
-                border-radius: 10px;
-                padding: 10px;
-            }
-        """)
-        input_box_lay = QVBoxLayout(input_container)
-        input_box_lay.setContentsMargins(6, 6, 6, 6)
-        input_box_lay.setSpacing(10)
+        self.input_container = QFrame(body)
+        self.input_container.setObjectName("InputContainer")
+        input_box_lay = QVBoxLayout(self.input_container)
+        input_box_lay.setContentsMargins(10, 10, 10, 10)
+        input_box_lay.setSpacing(8)
 
-        lbl_input_prompt = QLabel("Create New Overlay")
-        lbl_input_prompt.setStyleSheet("font-weight: 600; font-size: 9pt; color: #94a3b8;")
-        input_box_lay.addWidget(lbl_input_prompt)
+        lbl_row = QHBoxLayout()
+        self.lbl_input_prompt = QLabel("Create New Overlay")
+        self.lbl_input_prompt.setObjectName("InputPrompt")
+        lbl_row.addWidget(self.lbl_input_prompt)
+        lbl_row.addStretch(1)
+
+        self.btn_sticky_note = QPushButton("Sticky Note", self.input_container)
+        self.btn_sticky_note.setObjectName("StickyNoteBtn")
+        self.btn_sticky_note.setToolTip("Create a blank note overlay for sticky notes / scratchpad")
+        self.btn_sticky_note.setCursor(Qt.PointingHandCursor)
+        self.btn_sticky_note.clicked.connect(self._create_sticky_note)
+        lbl_row.addWidget(self.btn_sticky_note)
+
+        input_box_lay.addLayout(lbl_row)
 
         row_lay = QHBoxLayout()
         row_lay.setSpacing(8)
 
-        self.input_box = QLineEdit(input_container)
+        self.input_box = QLineEdit(self.input_container)
         self.input_box.setObjectName("UrlInputBox")
         self.input_box.setPlaceholderText("Enter URL, file path, or leave blank...")
         self.input_box.setClearButtonEnabled(True)
         self.input_box.returnPressed.connect(self._on_add_submitted)
         row_lay.addWidget(self.input_box, 1)
 
-        btn_browse = QToolButton(input_container)
-        btn_browse.setObjectName("FileBtn")
-        btn_browse.setText("Browse…")
-        btn_browse.setToolTip("Browse local file (PDF, Image, Markdown, Code)")
-        btn_browse.setCursor(Qt.PointingHandCursor)
-        btn_browse.clicked.connect(self._on_browse_file)
-        row_lay.addWidget(btn_browse)
+        # Browse button with icon
+        self.btn_browse = QToolButton(self.input_container)
+        self.btn_browse.setObjectName("FileBtn")
+        self.btn_browse.setText(GLYPH.get("open", "▤"))
+        self.btn_browse.setToolTip("Browse local file (PDF, Image, Markdown, Code)")
+        self.btn_browse.setCursor(Qt.PointingHandCursor)
+        self.btn_browse.setFixedSize(36, 32)
+        self.btn_browse.clicked.connect(self._on_browse_file)
+        row_lay.addWidget(self.btn_browse)
 
-        btn_add = QPushButton("+ Add", input_container)
-        btn_add.setObjectName("ActionBtn")
-        btn_add.setCursor(Qt.PointingHandCursor)
-        btn_add.clicked.connect(self._on_add_submitted)
-        row_lay.addWidget(btn_add)
+        self.btn_add = QPushButton("+ Add", self.input_container)
+        self.btn_add.setObjectName("ActionBtn")
+        self.btn_add.setCursor(Qt.PointingHandCursor)
+        self.btn_add.clicked.connect(self._on_add_submitted)
+        row_lay.addWidget(self.btn_add)
 
         input_box_lay.addLayout(row_lay)
-        root.addWidget(input_container)
+        body_lay.addWidget(self.input_container)
 
         # Search / filter box
-        self.search_box = QLineEdit(self)
+        self.search_box = QLineEdit(body)
         self.search_box.setObjectName("SearchBox")
         self.search_box.setPlaceholderText("Filter overlays by name, URL or status...")
         self.search_box.setClearButtonEnabled(True)
         self.search_box.textChanged.connect(self._filter_items)
-        root.addWidget(self.search_box)
+        body_lay.addWidget(self.search_box)
 
         # Scroll area containing overlay cards
-        self.scroll = QScrollArea(self)
+        self.scroll = QScrollArea(body)
+        self.scroll.setObjectName("CardsScrollArea")
         self.scroll.setWidgetResizable(True)
         self.scroll_content = QWidget()
         self.cards_layout = QVBoxLayout(self.scroll_content)
-        self.cards_layout.setContentsMargins(0, 4, 4, 4)
+        self.cards_layout.setContentsMargins(0, 2, 2, 2)
         self.cards_layout.setSpacing(8)
         self.cards_layout.addStretch(1)
         self.scroll.setWidget(self.scroll_content)
 
-        root.addWidget(self.scroll, 1)
+        body_lay.addWidget(self.scroll, 1)
 
         # Footer with status
         self.lbl_status = QLabel("0 overlays recorded")
-        self.lbl_status.setStyleSheet("color: #64748b; font-size: 8.5pt;")
-        root.addWidget(self.lbl_status)
+        self.lbl_status.setObjectName("StatusLabel")
+        body_lay.addWidget(self.lbl_status)
+
+        root.addWidget(body, 1)
 
         self._item_widgets = []
+        self.apply_theme(self._hue)
+
+    def _wire_default_settings(self):
+        self.btn_default_settings.clicked.connect(lambda: self.default_popup.show_below(self.btn_default_settings))
+        self.default_popup.hue_changed.connect(self._on_default_hue_changed)
+        self.default_popup.opacity_changed.connect(self._on_default_opacity_changed)
+        self.default_popup.on_top_changed.connect(lambda b: (setattr(self.default_look, "on_top", b), save_look(self.default_look)))
+        self.default_popup.click_through_changed.connect(lambda b: (setattr(self.default_look, "click_through", b), save_look(self.default_look)))
+        self.default_popup.capture_changed.connect(lambda b: (setattr(self.default_look, "hide_from_capture", b), save_look(self.default_look)))
+        self.default_popup.icon_changed.connect(self._on_default_icon_changed)
+        self.default_popup.new_overlay.connect(lambda: self.spawn_requested.emit(None, None, None, None, None))
+
+    def _on_default_hue_changed(self, hue: int):
+        self.default_look.hue = hue
+        save_look(self.default_look)
+        self.apply_theme(hue)
+
+    def _on_default_opacity_changed(self, op: float):
+        self.default_look.opacity = op
+        save_look(self.default_look)
+
+    def _on_default_icon_changed(self, name: str, file_path: str):
+        self.default_look.icon_name = name
+        self.default_look.icon_file = file_path
+        save_look(self.default_look)
+
+    def _create_sticky_note(self):
+        note_name = f"Sticky Note #{len(self._item_widgets) + 1}"
+        self.spawn_requested.emit(None, None, None, note_name, None)
+
+    def mousePressEvent(self, e):
+        if e.button() == Qt.LeftButton and e.position().y() <= 36 and self.windowHandle():
+            self.windowHandle().startSystemMove()
+        super().mousePressEvent(e)
+
+    def showEvent(self, e):
+        super().showEvent(e)
+        winapi.set_window_rounded_corners(self, small=False)
+
+    def apply_theme(self, hue: int):
+        self._hue = hue
+        acc = theme.accent(hue).name()
+        bg = theme.background(hue).name()
+        ch = theme.chrome(hue).name()
+
+        self.setStyleSheet(f"""
+            QWidget#HubWindow {{
+                background: {bg};
+                border: 1px solid {acc};
+                border-radius: 4px;
+            }}
+            QWidget#HubTitleBar {{
+                background: {ch};
+                border-top-left-radius: 4px;
+                border-top-right-radius: 4px;
+                border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+            }}
+            QLabel#title {{
+                color: {theme.TEXT};
+                font: 600 9.5pt "Segoe UI";
+            }}
+            QWidget#HubBody {{
+                background: transparent;
+            }}
+            QScrollArea#CardsScrollArea {{
+                background: transparent;
+                border: none;
+            }}
+            QFrame#InputContainer {{
+                background: rgba(255, 255, 255, 0.04);
+                border: 1px solid rgba(255, 255, 255, 0.10);
+                border-radius: 4px;
+            }}
+            QLabel#InputPrompt {{
+                font: 600 9pt "Segoe UI";
+                color: {theme.TEXT_MUTED};
+            }}
+            QPushButton#StickyNoteBtn {{
+                background: rgba(255, 255, 255, 0.08);
+                color: {theme.TEXT};
+                font: 8.5pt "Segoe UI";
+                border: 1px solid rgba(255, 255, 255, 0.14);
+                border-radius: 4px;
+                padding: 3px 8px;
+            }}
+            QPushButton#StickyNoteBtn:hover {{
+                background: rgba(255, 255, 255, 0.16);
+            }}
+            QLabel#StatusLabel {{
+                color: {theme.TEXT_MUTED};
+                font: 8.5pt "Segoe UI";
+            }}
+            QLineEdit#UrlInputBox {{
+                background: rgba(255, 255, 255, 0.06);
+                color: {theme.TEXT};
+                border: 1px solid rgba(255, 255, 255, 0.14);
+                border-radius: 4px;
+                padding: 6px 10px;
+                font: 9.5pt "Segoe UI";
+            }}
+            QLineEdit#UrlInputBox:focus {{
+                border: 1px solid {acc};
+                background: rgba(255, 255, 255, 0.10);
+            }}
+            QLineEdit#SearchBox {{
+                background: rgba(255, 255, 255, 0.04);
+                color: {theme.TEXT};
+                border: 1px solid rgba(255, 255, 255, 0.10);
+                border-radius: 4px;
+                padding: 6px 10px;
+                font: 8.5pt "Segoe UI";
+            }}
+            QLineEdit#SearchBox:focus {{
+                border: 1px solid {acc};
+                background: rgba(255, 255, 255, 0.08);
+            }}
+            QToolButton#FileBtn {{
+                background: rgba(255, 255, 255, 0.08);
+                color: {theme.TEXT};
+                font-family: "Segoe MDL2 Assets";
+                font-size: 10pt;
+                border: 1px solid rgba(255, 255, 255, 0.15);
+                border-radius: 4px;
+            }}
+            QToolButton#FileBtn:hover {{
+                background: rgba(255, 255, 255, 0.16);
+            }}
+            QPushButton#ActionBtn {{
+                background: {acc};
+                color: #0b111e;
+                font: 600 9.5pt "Segoe UI";
+                border: none;
+                border-radius: 4px;
+                padding: 6px 14px;
+            }}
+            QPushButton#ActionBtn:hover {{
+                background: {acc};
+                opacity: 0.9;
+            }}
+            {theme.toolbutton_stylesheet()}
+            {theme.scrollbar_stylesheet(hue)}
+        """)
+
+        self.default_popup.apply_theme(hue)
+        for item in self._item_widgets:
+            item.apply_theme(hue)
 
     def focus_input(self):
         """Focus the input text box and select all for rapid new overlay creation."""
@@ -476,15 +617,22 @@ class HubWindow(QWidget):
         text = self.input_box.text().strip()
         source = text if text else None
         self.input_box.clear()
-        self.spawn_requested.emit(source, None, None, None)
+        self.spawn_requested.emit(source, None, None, None, None)
 
     def _on_browse_file(self):
         path, _ = QFileDialog.getOpenFileName(self, "Select file to overlay", "", FILE_FILTER)
         if path:
-            self.spawn_requested.emit(path, None, None, None)
+            self.spawn_requested.emit(path, None, None, None, None)
 
     def refresh(self, active_windows):
         """Rebuild list showing ALL overlays (active + inactive/saved in past)."""
+        # Sync current default hue
+        cur_hue = load_look().hue
+        if active_windows:
+            cur_hue = active_windows[-1].look.hue
+        if cur_hue != self._hue:
+            self.apply_theme(cur_hue)
+
         for item in self._item_widgets:
             self.cards_layout.removeWidget(item)
             item.deleteLater()
@@ -507,6 +655,8 @@ class HubWindow(QWidget):
                     "hide_from_capture": w.look.hide_from_capture,
                     "click_through": w.look.click_through,
                     "invert_colors": w.look.invert_colors,
+                    "icon_name": w.look.icon_name,
+                    "icon_file": w.look.icon_file,
                 }
                 upsert_overlay_record(
                     w.overlay_id,
@@ -525,7 +675,7 @@ class HubWindow(QWidget):
         for rec in all_ordered:
             oid = rec.get("id")
             live_win = active_map.get(oid)
-            card = OverlayListItem(rec, live_overlay=live_win, parent=self.scroll_content)
+            card = OverlayListItem(rec, live_overlay=live_win, parent=self.scroll_content, hue=self._hue)
             card.bring_front_requested.connect(self.bring_front_requested.emit)
             card.toggle_collapse_requested.connect(self.toggle_collapse_requested.emit)
             card.toggle_click_through_requested.connect(self.toggle_click_through_requested.emit)
@@ -555,10 +705,13 @@ class HubWindow(QWidget):
                 hide_from_capture=bool(raw_look.get("hide_from_capture", True)),
                 click_through=bool(raw_look.get("click_through", False)),
                 invert_colors=bool(raw_look.get("invert_colors", False)),
+                icon_name=str(raw_look.get("icon_name", "moon")),
+                icon_file=raw_look.get("icon_file", None),
             )
         oid = record.get("id")
         name = record.get("name")
-        self.spawn_requested.emit(src, look, oid, name)
+        geom = record.get("geometry")
+        self.spawn_requested.emit(src, look, oid, name, geom)
 
     def _delete_record(self, overlay_id: str):
         delete_overlay_record(overlay_id)

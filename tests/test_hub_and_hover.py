@@ -66,3 +66,50 @@ def test_selective_hover_click_through_tracker(qtbot):
     assert not win._ghost_timer.isActive()
 
     win.close()
+
+
+def test_overlay_geometry_persistence_after_close(qtbot):
+    from lucent.config import save_overlay_registry, load_overlay_registry
+    save_overlay_registry([])
+
+    mgr = Manager([])
+    hub = HubWindow(mgr)
+    qtbot.addWidget(hub)
+    mgr._hub = hub
+    hub.spawn_requested.connect(lambda src, look, oid, name, geom=None: mgr.spawn(src, look=look, overlay_id=oid, name=name, geometry=geom))
+
+    # Spawn overlay and resize / move it
+    win = mgr.spawn(None, overlay_id="custom_test_overlay_1", name="Custom Note")
+    qtbot.addWidget(win)
+    win.setGeometry(150, 180, 520, 410)
+    win.persist_state()
+
+    # Verify saved geometry in registry
+    records = load_overlay_registry()
+    rec = next(r for r in records if r["id"] == "custom_test_overlay_1")
+    assert rec["geometry"] == [150, 180, 520, 410]
+
+    # Close overlay
+    win.close()
+
+    # Re-open / restore overlay via hub
+    hub.refresh(mgr._windows)
+    inactive_items = [it for it in hub._item_widgets if it.record and it.record.get("id") == "custom_test_overlay_1"]
+    assert len(inactive_items) == 1
+
+    hub._restore_inactive_overlay(inactive_items[0].record)
+    assert len(mgr._windows) == 1
+    restored = mgr._windows[0]
+
+    # Wait for intro animation slide to complete to target end pos
+    if restored._intro:
+        qtbot.wait(200)
+
+    assert restored.overlay_id == "custom_test_overlay_1"
+    assert restored.geometry().x() == 150
+    assert restored.geometry().y() == 180
+    assert restored.geometry().width() == 520
+    assert restored.geometry().height() == 410
+
+    restored.close()
+    hub.close()

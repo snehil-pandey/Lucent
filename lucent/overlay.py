@@ -1,4 +1,8 @@
-"""One Lucent overlay window. Open as many as you like; each has its own look."""
+"""One Lucent overlay window. Open as many as you like; each has its own look.
+The overlay viewport does not resize or shift when hovering; the title bar is an
+overlay positioned directly on top of the content viewport.
+Taskbar icon is hidden (Qt.SubWindow / Qt.Tool) so overlays do not clutter the taskbar.
+"""
 from PySide6.QtCore import (QEasingCurve, QEvent, QParallelAnimationGroup,
                             QPoint, QPropertyAnimation, QRect, QRectF, Qt, QTimer, Signal)
 from PySide6.QtGui import (QColor, QCursor, QFont, QGuiApplication, QKeySequence,
@@ -7,11 +11,11 @@ from PySide6.QtWidgets import QFileDialog, QVBoxLayout, QWidget
 
 from . import theme, winapi
 from .config import Look, add_recent_source, save_look, upsert_overlay_record
-from .icon import app_icon, draw_moon
+from .icon import app_icon, draw_shape_icon, render_overlay_pixmap
 from .settings_popup import SettingsPopup
 from .sources import normalize_source
 from .titlebar import TitleBar
-from .viewers import FILE_FILTER, EmptyViewer, UnsupportedViewer, create_viewer
+from .viewers import FILE_FILTER, EmptyViewer, NoteViewer, UnsupportedViewer, create_viewer
 
 EDGE = 6          # resize border, in px
 MIN_OPACITY = 0.25
@@ -24,7 +28,7 @@ class OverlayWindow(QWidget):
     new_overlay_requested = Signal(object)   # a source to open, or None for an empty one
     hub_requested = Signal()
 
-    def __init__(self, look: Look, source=None, index: int = 1, overlay_id: str = None, name: str = None):
+    def __init__(self, look: Look, source=None, index: int = 1, overlay_id: str = None, name: str = None, geometry=None):
         super().__init__()
         self.look = look
         self.index = index
@@ -40,24 +44,38 @@ class OverlayWindow(QWidget):
         self.setWindowIcon(app_icon())
         self.setAttribute(Qt.WA_DeleteOnClose)
         self.setAttribute(Qt.WA_Hover, True)
+        self.setAttribute(Qt.WA_NoSystemBackground, True)
+        self.setAttribute(Qt.WA_OpaquePaintEvent, True)
         self.setMouseTracking(True)
         self.setAcceptDrops(True)
         self.setMinimumSize(380, 260)
-        self.resize(940, 640)
+        if geometry and len(geometry) == 4:
+            self.setGeometry(QRect(int(geometry[0]), int(geometry[1]), int(geometry[2]), int(geometry[3])))
+        else:
+            self.resize(940, 640)
         self.setWindowFlags(self._flags())
 
         root = QVBoxLayout(self)
         root.setContentsMargins(EDGE, EDGE, EDGE, EDGE)
         root.setSpacing(0)
-        self.titlebar = TitleBar(self)
-        self.titlebar.set_title(self.custom_name)
-        self.titlebar.setVisible(False)  # Hidden by default: plain box! Appears on hover
 
+        # Body fills the entire window client area
         self.body = QWidget(self)
         self.body_layout = QVBoxLayout(self.body)
         self.body_layout.setContentsMargins(0, 0, 0, 0)
-        root.addWidget(self.titlebar)
         root.addWidget(self.body, 1)
+
+        # Floating Hover TitleBar overlaid on top of content so viewport NEVER shifts
+        self.titlebar = TitleBar(self)
+        self.titlebar.set_title(self.custom_name)
+        self.titlebar.setVisible(False)  # Hidden by default; appears seamlessly on hover
+        self.titlebar.raise_()
+
+        # Title bar auto-hide timer: visible for 4.5s on hover, then auto-hides until hovered again
+        self._titlebar_timer = QTimer(self)
+        self._titlebar_timer.setSingleShot(True)
+        self._titlebar_timer.setInterval(4500)
+        self._titlebar_timer.timeout.connect(self._on_titlebar_timeout)
 
         self._collapsed = False
         self._pre_collapse_geom = None
@@ -66,10 +84,20 @@ class OverlayWindow(QWidget):
         self._wire()
         self._shortcuts()
         self.popup.sync(self.look)
-        self._show_viewer(EmptyViewer())
+
+        if source and str(source).startswith("note:"):
+            # Sticky note with text
+            initial_text = str(source)[5:]
+            self.open_note(initial_text)
+        elif name and "Sticky Note" in name and not source:
+            # New Sticky Note requested
+            self.open_note("")
+        else:
+            self._show_viewer(EmptyViewer())
+            if source:
+                self.open_source(source)
         self._retheme()
-        if source:
-            self.open_source(source)
+
 
     # setup --------------------------------------------------------------
     def _flags(self):
@@ -83,16 +111,19 @@ class OverlayWindow(QWidget):
     def _wire(self):
         t = self.titlebar
         t.new_overlay.connect(lambda: self.new_overlay_requested.emit(None))
+        t.collapse_clicked.connect(self.toggle_collapse)
         t.settings_clicked.connect(self.popup.show_below)
         t.invert_toggled.connect(self.toggle_invert_colors)
         t.click_through_toggled.connect(self.toggle_click_through)
         t.close_clicked.connect(self.close)
+
         p = self.popup
         p.opacity_changed.connect(self.set_opacity)
         p.hue_changed.connect(self.set_hue)
         p.on_top_changed.connect(self.set_on_top)
         p.click_through_changed.connect(self.set_click_through)
         p.capture_changed.connect(self.set_hide_from_capture)
+        p.icon_changed.connect(self.set_icon)
         p.new_overlay.connect(lambda: self.new_overlay_requested.emit(None))
 
     def _shortcuts(self):
@@ -183,12 +214,12 @@ class OverlayWindow(QWidget):
             self.setFixedSize(50, 50)
             self.setToolTip(f"Lucent #{self.index} (Double-click or press Ctrl+K to expand)")
 
-            # Animate geometry shrink smoothly
+            # Animate geometry shrink smoothly & swiftly
             anim = QPropertyAnimation(self, b"geometry")
-            anim.setDuration(160)
+            anim.setDuration(120)
             anim.setStartValue(cur_geom)
             anim.setEndValue(target_geom)
-            anim.setEasingCurve(QEasingCurve.OutCubic)
+            anim.setEasingCurve(QEasingCurve.OutQuad)
             anim.finished.connect(lambda: (self.setFixedSize(50, 50), self.update()))
             self._collapse_anim = anim
             anim.start()
@@ -196,18 +227,18 @@ class OverlayWindow(QWidget):
             self.setMinimumSize(380, 260)
             self.setMaximumSize(16777215, 16777215)
             self.layout().setContentsMargins(EDGE, EDGE, EDGE, EDGE)
-            self.titlebar.show()
             self.body.show()
+            self._position_floating_titlebar()
             self.setToolTip("")
 
             target_geom = self._pre_collapse_geom if self._pre_collapse_geom else QRect(cur_geom.x(), cur_geom.y(), 940, 640)
 
             anim = QPropertyAnimation(self, b"geometry")
-            anim.setDuration(200)
+            anim.setDuration(140)
             anim.setStartValue(cur_geom)
             anim.setEndValue(target_geom)
-            anim.setEasingCurve(QEasingCurve.OutCubic)
-            anim.finished.connect(lambda: self.update())
+            anim.setEasingCurve(QEasingCurve.OutQuad)
+            anim.finished.connect(lambda: (self._position_floating_titlebar(), self.update()))
             self._collapse_anim = anim
             anim.start()
 
@@ -256,6 +287,7 @@ class OverlayWindow(QWidget):
         is_over_win = win_rect.contains(cursor_pos)
         if is_over_win and not self.titlebar.isVisible():
             self.titlebar.setVisible(True)
+            self.titlebar.raise_()
         elif not is_over_win and self.titlebar.isVisible() and not self.popup.isVisible():
             self.titlebar.setVisible(False)
 
@@ -287,6 +319,17 @@ class OverlayWindow(QWidget):
         except Exception as exc:
             viewer = UnsupportedViewer(str(exc))
         self._show_viewer(viewer)
+
+    def open_note(self, initial_text: str = ""):
+        self.current_source = f"note:{initial_text}"
+        viewer = NoteViewer(initial_text=initial_text)
+        viewer.text_modified.connect(self._on_note_text_modified)
+        self._show_viewer(viewer)
+        self.persist_state()
+
+    def _on_note_text_modified(self, text: str):
+        self.current_source = f"note:{text}"
+        self.persist_state()
 
     def open_dialog(self):
         path, _ = QFileDialog.getOpenFileName(self, "Open in Lucent", "", FILE_FILTER)
@@ -320,8 +363,20 @@ class OverlayWindow(QWidget):
         save_look(self.look)
         self.persist_state()
 
+    def set_icon(self, icon_name: str, icon_file: str = None):
+        self.look.icon_name = icon_name
+        self.look.icon_file = icon_file
+        pm = render_overlay_pixmap(18, icon_name, icon_file)
+        self.titlebar.set_icon_pixmap(pm)
+        save_look(self.look)
+        self.persist_state()
+        self.update()
+
     def persist_state(self):
-        g = self.geometry()
+        if self._collapsed and self._pre_collapse_geom:
+            g = self._pre_collapse_geom
+        else:
+            g = self.normalGeometry() if (self.isMaximized() or self.isFullScreen()) else self.geometry()
         look_dict = {
             "opacity": self.look.opacity,
             "hue": self.look.hue,
@@ -329,6 +384,8 @@ class OverlayWindow(QWidget):
             "hide_from_capture": self.look.hide_from_capture,
             "click_through": self.look.click_through,
             "invert_colors": self.look.invert_colors,
+            "icon_name": self.look.icon_name,
+            "icon_file": self.look.icon_file,
         }
         upsert_overlay_record(
             overlay_id=self.overlay_id,
@@ -376,53 +433,114 @@ class OverlayWindow(QWidget):
 
     def _apply_inversion(self):
         if not self._viewer:
+            self.update()
             return
         if self.look.invert_colors:
-            # Apply high contrast invert filter to content viewer
-            # For Web/HTML and Text viewers, CSS filters or background adjustments make reading transparent docs effortless
+            # Enhanced readability high-contrast mode:
+            # Sets a deep obsidian background for crisp legibility and inverts/high-contrasts documents
             self.body.setStyleSheet("QWidget#body { background: transparent; }")
-            # For WebEngine or generic widgets, we can apply an invert stylesheet filter or theme update
-            if hasattr(self._viewer, "_edit"):
+            if hasattr(self._viewer, "editor") and hasattr(self._viewer.editor, "setStyleSheet"):
+                # NoteViewer / CodeEditor
+                self._viewer.editor.setStyleSheet(f"""
+                    QPlainTextEdit {{
+                        background: rgba(8, 10, 15, 0.95);
+                        color: #ffffff;
+                        selection-background-color: {theme.accent(self.look.hue).name()};
+                        padding: 6px;
+                    }}
+                    {theme.scrollbar_stylesheet(self.look.hue)}
+                """)
+            elif hasattr(self._viewer, "_edit"):
+                # TextViewer
                 self._viewer._edit.setStyleSheet(f"""
-                    QPlainTextEdit {{ background: rgba(10, 10, 15, 0.90); color: #f8fafc; padding: 10px; }}
+                    QPlainTextEdit {{
+                        background: rgba(8, 10, 15, 0.95);
+                        color: #ffffff;
+                        padding: 10px;
+                        selection-background-color: {theme.accent(self.look.hue).name()};
+                    }}
                     {theme.scrollbar_stylesheet(self.look.hue)}
                 """)
             elif hasattr(self._viewer, "_view") and hasattr(self._viewer._view, "setPalette"):
+                # PdfViewer
                 pal = self._viewer._view.palette()
-                pal.setColor(pal.ColorRole.Base, QColor(20, 20, 25))
-                pal.setColor(pal.ColorRole.WindowText, QColor(240, 240, 245))
+                pal.setColor(pal.ColorRole.Base, QColor(12, 14, 20))
+                pal.setColor(pal.ColorRole.WindowText, QColor(255, 255, 255))
                 self._viewer._view.setPalette(pal)
+            elif hasattr(self._viewer, "_web"):
+                # WebViewer: run dark mode / inverted CSS injection for instant high-contrast readability
+                js = """
+                (function() {
+                    let el = document.getElementById('lucent-readability-style');
+                    if (!el) {
+                        el = document.createElement('style');
+                        el.id = 'lucent-readability-style';
+                        el.innerHTML = 'html { filter: invert(90%) hue-rotate(180deg) contrast(110%) !important; background: #111 !important; }';
+                        document.head.appendChild(el);
+                    }
+                })();
+                """
+                self._viewer._web.page().runJavaScript(js)
         else:
-            if hasattr(self._viewer, "_edit"):
+            if hasattr(self._viewer, "editor"):
+                self._viewer.apply_theme(self.look.hue)
+            elif hasattr(self._viewer, "_edit"):
                 self._viewer.apply_theme(self.look.hue)
             elif hasattr(self._viewer, "_view") and hasattr(self._viewer._view, "setPalette"):
                 self._viewer.apply_theme(self.look.hue)
+            elif hasattr(self._viewer, "_web"):
+                js = """
+                (function() {
+                    let el = document.getElementById('lucent-readability-style');
+                    if (el) el.remove();
+                })();
+                """
+                self._viewer._web.page().runJavaScript(js)
+        self.update()
 
     def _retheme(self):
         h = self.look.hue
         self.setStyleSheet(theme.scrollbar_stylesheet(h))
         self.titlebar.apply_theme(h)
         self.titlebar.set_inverted(self.look.invert_colors)
+        pm = render_overlay_pixmap(18, self.look.icon_name, self.look.icon_file)
+        self.titlebar.set_icon_pixmap(pm)
         self.popup.apply_theme(h)
         if self._viewer:
             self._viewer.apply_theme(h)
             self._apply_inversion()
         self.update()
 
+    def _position_floating_titlebar(self):
+        if self.isFullScreen() or self.isMaximized():
+            self.titlebar.setGeometry(0, 0, self.width(), self.titlebar.HEIGHT)
+        else:
+            self.titlebar.setGeometry(EDGE, EDGE, max(10, self.width() - 2 * EDGE), self.titlebar.HEIGHT)
+
+    def resizeEvent(self, e):
+        super().resizeEvent(e)
+        self._position_floating_titlebar()
+        if not self._collapsed:
+            self.persist_state()
+
     def paintEvent(self, _):
         p = QPainter(self)
         p.setRenderHint(QPainter.Antialiasing)
         if self._collapsed:
-            # Draw sleek circular/rounded icon badge with moon and overlay number
+            # Draw abstract, crisp rounded icon badge with custom icon and overlay number
             rect = QRectF(self.rect()).adjusted(1, 1, -1, -1)
             p.setBrush(theme.background(self.look.hue))
             acc = theme.accent(self.look.hue)
             p.setPen(acc)
-            p.drawRoundedRect(rect, 12, 12)
+            p.drawRoundedRect(rect, 4, 4)
 
-            # Draw moon in center
-            moon_rect = QRectF(8, 8, 34, 34)
-            draw_moon(p, moon_rect, glow=0.3, opacity=0.95)
+            # Draw icon shape in center
+            icon_rect = QRectF(8, 8, 34, 34)
+            if self.look.icon_file and os.path.isfile(self.look.icon_file):
+                pm = render_overlay_pixmap(34, self.look.icon_name, self.look.icon_file)
+                p.drawPixmap(8, 8, pm)
+            else:
+                draw_shape_icon(p, icon_rect, shape=self.look.icon_name, glow=0.3, opacity=0.95)
 
             # Draw overlay index badge in bottom-right corner
             badge_bg = acc
@@ -430,7 +548,7 @@ class OverlayWindow(QWidget):
             p.setBrush(badge_bg)
             p.setPen(Qt.NoPen)
             badge_rect = QRectF(28, 28, 18, 18)
-            p.drawEllipse(badge_rect)
+            p.drawRoundedRect(badge_rect, 4, 4)
 
             p.setPen(Qt.white)
             font = QFont("Segoe UI", 8)
@@ -438,11 +556,19 @@ class OverlayWindow(QWidget):
             p.setFont(font)
             p.drawText(badge_rect, Qt.AlignCenter, str(self.index))
         else:
-            p.fillRect(self.rect(), theme.background(self.look.hue))
-            border = theme.accent(self.look.hue)
-            border.setAlpha(110)
-            p.setPen(border)
-            p.drawRect(self.rect().adjusted(0, 0, -1, -1))
+            if self.look.invert_colors:
+                # High-contrast enhanced readability backdrop
+                p.fillRect(self.rect(), QColor(10, 12, 18, 245))
+                border = theme.accent(self.look.hue)
+                border.setAlpha(200)
+                p.setPen(border)
+                p.drawRoundedRect(QRectF(self.rect()).adjusted(0.5, 0.5, -0.5, -0.5), 4, 4)
+            else:
+                p.fillRect(self.rect(), theme.background(self.look.hue))
+                border = theme.accent(self.look.hue)
+                border.setAlpha(110)
+                p.setPen(border)
+                p.drawRoundedRect(QRectF(self.rect()).adjusted(0.5, 0.5, -0.5, -0.5), 4, 4)
         p.end()
 
     def mouseDoubleClickEvent(self, e):
@@ -458,13 +584,13 @@ class OverlayWindow(QWidget):
         fade = QPropertyAnimation(self, b"windowOpacity")
         fade.setStartValue(self.windowOpacity())
         fade.setEndValue(0.0)
-        fade.setDuration(160)
+        fade.setDuration(110)
         fade.setEasingCurve(QEasingCurve.InQuad)
 
         slide = QPropertyAnimation(self, b"pos")
         slide.setStartValue(cur_pos)
-        slide.setEndValue(cur_pos + QPoint(0, 16))
-        slide.setDuration(160)
+        slide.setEndValue(cur_pos + QPoint(0, 10))
+        slide.setDuration(110)
         slide.setEasingCurve(QEasingCurve.InQuad)
 
         group = QParallelAnimationGroup(self)
@@ -483,19 +609,19 @@ class OverlayWindow(QWidget):
     def show_animated(self):
         end = self.pos()
         self.setWindowOpacity(0.0)
-        self.move(end + QPoint(0, 10))
+        self.move(end + QPoint(0, 6))
         self.show()
         fade = QPropertyAnimation(self, b"windowOpacity")
         fade.setStartValue(0.0)
         fade.setEndValue(self.look.opacity)
-        fade.setDuration(240)
-        fade.setEasingCurve(QEasingCurve.OutCubic)
+        fade.setDuration(140)
+        fade.setEasingCurve(QEasingCurve.OutQuad)
 
         slide = QPropertyAnimation(self, b"pos")
-        slide.setStartValue(end + QPoint(0, 10))
+        slide.setStartValue(end + QPoint(0, 6))
         slide.setEndValue(end)
-        slide.setDuration(240)
-        slide.setEasingCurve(QEasingCurve.OutCubic)
+        slide.setDuration(140)
+        slide.setEasingCurve(QEasingCurve.OutQuad)
 
         group = QParallelAnimationGroup(self)
         group.addAnimation(fade)
@@ -506,7 +632,10 @@ class OverlayWindow(QWidget):
 
     def showEvent(self, e):
         super().showEvent(e)
+        self._position_floating_titlebar()
         QTimer.singleShot(0, self._apply_capture)
+        QTimer.singleShot(0, lambda: winapi.set_taskbar_hidden(self, True))
+        QTimer.singleShot(0, lambda: winapi.set_window_rounded_corners(self, small=True))
         if self.look.click_through:
             QTimer.singleShot(0, lambda: self.set_click_through(True))
         self._register_hotkey()
@@ -551,10 +680,12 @@ class OverlayWindow(QWidget):
             fs, mx = self.isFullScreen(), self.isMaximized()
             m = 0 if (fs or mx) else EDGE
             self.layout().setContentsMargins(m, m, m, m)
+            self._position_floating_titlebar()
             self.titlebar.setVisible(not fs)
         super().changeEvent(e)
 
     def closeEvent(self, e):
+        self._titlebar_timer.stop()
         self._stop_ghost_hover_tracker()
         self._unregister_hotkey()
         self.persist_state()
@@ -619,17 +750,26 @@ class OverlayWindow(QWidget):
     def mouseReleaseEvent(self, e):
         if e.button() == Qt.LeftButton and self._drag_pos is not None:
             self._drag_pos = None
+            self.persist_state()
             e.accept()
             return
         super().mouseReleaseEvent(e)
 
+    def _on_titlebar_timeout(self):
+        if not self._collapsed and not self.popup.isVisible():
+            self.titlebar.setVisible(False)
+
     def enterEvent(self, e):
         if not self._collapsed:
+            self._position_floating_titlebar()
             self.titlebar.setVisible(True)
+            self.titlebar.raise_()
+            self._titlebar_timer.start(4500)
         super().enterEvent(e)
 
     def leaveEvent(self, e):
         self.unsetCursor()
+        self._titlebar_timer.stop()
         # Keep titlebar visible if settings popup or child widget has focus/active
         if not self._collapsed and not self.popup.isVisible():
             self.titlebar.setVisible(False)

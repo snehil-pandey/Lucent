@@ -1,12 +1,14 @@
-"""Flyout with the opacity / hue sliders and window options."""
+"""Flyout with the opacity / hue sliders, window options, and icon customizer."""
 import sys
 
 from PySide6.QtCore import QPoint, Qt, Signal
-from PySide6.QtGui import QGuiApplication
-from PySide6.QtWidgets import (QCheckBox, QFrame, QHBoxLayout, QLabel,
-                               QPushButton, QSlider, QVBoxLayout)
+from PySide6.QtGui import QGuiApplication, QIcon
+from PySide6.QtWidgets import (QCheckBox, QComboBox, QFileDialog, QFrame,
+                               QHBoxLayout, QLabel, QPushButton, QSlider,
+                               QToolButton, QVBoxLayout)
 
 from . import theme, winapi
+from .icon import ICON_PRESETS, render_overlay_pixmap
 
 _HUE_GRADIENT = ", ".join(
     f"stop:{i / 6:.3f} hsv({min(i * 60, 359)},170,235)" for i in range(7)
@@ -19,6 +21,7 @@ class SettingsPopup(QFrame):
     on_top_changed = Signal(bool)
     capture_changed = Signal(bool)
     click_through_changed = Signal(bool)
+    icon_changed = Signal(str, object)  # icon_name, icon_file
     new_overlay = Signal()
 
     def __init__(self, parent=None):
@@ -26,12 +29,14 @@ class SettingsPopup(QFrame):
         self.setAttribute(Qt.WA_StyledBackground, True)
         self.setFixedWidth(290)
         self._hide_capture = True
+        self._current_icon_name = "moon"
+        self._current_icon_file = None
 
         lay = QVBoxLayout(self)
         lay.setContentsMargins(16, 14, 16, 14)
         lay.setSpacing(8)
 
-        head = QLabel("Overlay")
+        head = QLabel("Overlay Settings")
         head.setObjectName("head")
         lay.addWidget(head)
 
@@ -47,6 +52,26 @@ class SettingsPopup(QFrame):
         self.hue.setRange(0, 359)
         lay.addLayout(self._row("Hue", self._hue_val))
         lay.addWidget(self.hue)
+
+        # Icon customizer row
+        icon_row = QHBoxLayout()
+        icon_row.addWidget(QLabel("Icon"))
+        icon_row.addStretch(1)
+
+        self.cmb_icon = QComboBox(self)
+        self.cmb_icon.setObjectName("IconSelect")
+        for preset in ICON_PRESETS:
+            self.cmb_icon.addItem(preset.capitalize(), preset)
+        self.cmb_icon.currentIndexChanged.connect(self._on_preset_selected)
+        icon_row.addWidget(self.cmb_icon)
+
+        self.btn_custom_icon = QToolButton(self)
+        self.btn_custom_icon.setText("Custom…")
+        self.btn_custom_icon.setToolTip("Pick a custom PNG/ICO file for this overlay")
+        self.btn_custom_icon.clicked.connect(self._pick_custom_icon_file)
+        icon_row.addWidget(self.btn_custom_icon)
+
+        lay.addLayout(icon_row)
 
         self.chk_top = QCheckBox("Always on top")
         self.chk_click = QCheckBox("Click-through (Ghost mode)  [Ctrl+M]")
@@ -73,6 +98,20 @@ class SettingsPopup(QFrame):
         self.chk_click.toggled.connect(self.click_through_changed)
         self.chk_capture.toggled.connect(self.capture_changed)
 
+    def _on_preset_selected(self, index):
+        name = self.cmb_icon.currentData()
+        self._current_icon_name = name
+        self._current_icon_file = None
+        self.icon_changed.emit(name, None)
+
+    def _pick_custom_icon_file(self):
+        path, _ = QFileDialog.getOpenFileName(
+            self, "Select Icon File", "", "Images (*.png *.ico *.svg *.jpg *.bmp);;All files (*)"
+        )
+        if path:
+            self._current_icon_file = path
+            self.icon_changed.emit(self._current_icon_name, path)
+
     @staticmethod
     def _row(name, value_label):
         row = QHBoxLayout()
@@ -91,14 +130,21 @@ class SettingsPopup(QFrame):
         self.hue_changed.emit(v)
 
     def sync(self, look):
-        for w in (self.opacity, self.hue, self.chk_top, self.chk_click, self.chk_capture):
+        for w in (self.opacity, self.hue, self.chk_top, self.chk_click, self.chk_capture, self.cmb_icon):
             w.blockSignals(True)
         self.opacity.setValue(round(look.opacity * 100))
         self.hue.setValue(look.hue)
         self.chk_top.setChecked(look.on_top)
         self.chk_click.setChecked(look.click_through)
         self.chk_capture.setChecked(look.hide_from_capture)
-        for w in (self.opacity, self.hue, self.chk_top, self.chk_click, self.chk_capture):
+
+        idx = self.cmb_icon.findData(look.icon_name)
+        if idx >= 0:
+            self.cmb_icon.setCurrentIndex(idx)
+        self._current_icon_name = look.icon_name
+        self._current_icon_file = look.icon_file
+
+        for w in (self.opacity, self.hue, self.chk_top, self.chk_click, self.chk_capture, self.cmb_icon):
             w.blockSignals(False)
         self._op_val.setText(f"{100 - self.opacity.value()}%")
         self._hue_val.setText(f"{self.hue.value()}°")
@@ -122,6 +168,31 @@ class SettingsPopup(QFrame):
             QSlider#hue::sub-page:horizontal {{ background: transparent; }}
             QSlider::handle:horizontal {{ background: white; width: 14px; height: 14px;
                 margin: -5px 0; border-radius: 7px; }}
+            QComboBox#IconSelect {{
+                background: rgba(255,255,255,0.10);
+                color: {theme.TEXT};
+                border: 1px solid rgba(255,255,255,0.18);
+                border-radius: 4px;
+                padding: 3px 8px;
+                font-size: 9pt;
+            }}
+            QComboBox#IconSelect QAbstractItemView {{
+                background: {bg};
+                color: {theme.TEXT};
+                selection-background-color: {acc};
+                border: 1px solid {acc};
+            }}
+            QToolButton {{
+                background: rgba(255,255,255,0.10);
+                color: {theme.TEXT};
+                border: 1px solid rgba(255,255,255,0.15);
+                border-radius: 4px;
+                padding: 3px 8px;
+                font-size: 8.5pt;
+            }}
+            QToolButton:hover {{
+                background: rgba(255,255,255,0.18);
+            }}
             QPushButton {{ background: rgba(255,255,255,0.10); color: {theme.TEXT};
                 border: 1px solid rgba(255,255,255,0.15); border-radius: 4px; padding: 6px; }}
             QPushButton:hover {{ background: rgba(255,255,255,0.18); }}

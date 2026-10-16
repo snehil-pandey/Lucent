@@ -16,6 +16,8 @@ class Look:
     hide_from_capture: bool = True
     click_through: bool = False
     invert_colors: bool = False
+    icon_name: str = "moon"
+    icon_file: Optional[str] = None
 
 
 def _settings() -> QSettings:
@@ -35,6 +37,8 @@ def load_look() -> Look:
         hide_from_capture=_flag(s.value("hide_from_capture", "true")),
         click_through=_flag(s.value("click_through", "false")),
         invert_colors=_flag(s.value("invert_colors", "false")),
+        icon_name=str(s.value("icon_name", "moon")),
+        icon_file=s.value("icon_file", None),
     )
 
 
@@ -46,6 +50,11 @@ def save_look(look: Look) -> None:
     s.setValue("hide_from_capture", look.hide_from_capture)
     s.setValue("click_through", look.click_through)
     s.setValue("invert_colors", look.invert_colors)
+    s.setValue("icon_name", look.icon_name)
+    if look.icon_file:
+        s.setValue("icon_file", look.icon_file)
+    else:
+        s.remove("icon_file")
 
 
 # Session & Recent Files Persistence ---------------------------------

@@ -117,30 +117,35 @@ class Manager(QObject):
         self.show_hub(focus_input=True)
 
     def _on_app_quit(self):
-        session_data = []
-        for w in self._windows:
-            g = w.geometry()
-            look_dict = {
-                "opacity": w.look.opacity,
-                "hue": w.look.hue,
-                "on_top": w.look.on_top,
-                "hide_from_capture": w.look.hide_from_capture,
-                "click_through": w.look.click_through,
-                "invert_colors": w.look.invert_colors,
-            }
-            session_data.append({
-                "id": w.overlay_id,
-                "name": w.custom_name,
-                "source": getattr(w, "current_source", None),
-                "geometry": [g.x(), g.y(), g.width(), g.height()],
-                "look": look_dict,
-            })
-        save_session(session_data)
+        try:
+            session_data = []
+            for w in list(self._windows):
+                g = w.geometry()
+                look_dict = {
+                    "opacity": w.look.opacity,
+                    "hue": w.look.hue,
+                    "on_top": w.look.on_top,
+                    "hide_from_capture": w.look.hide_from_capture,
+                    "click_through": w.look.click_through,
+                    "invert_colors": w.look.invert_colors,
+                    "icon_name": w.look.icon_name,
+                    "icon_file": w.look.icon_file,
+                }
+                session_data.append({
+                    "id": w.overlay_id,
+                    "name": w.custom_name,
+                    "source": getattr(w, "current_source", None),
+                    "geometry": [g.x(), g.y(), g.width(), g.height()],
+                    "look": look_dict,
+                })
+            save_session(session_data)
+        except Exception:
+            pass
 
     def show_hub(self, focus_input: bool = False):
         if self._hub is None:
             self._hub = HubWindow(self)
-            self._hub.spawn_requested.connect(lambda src, look, oid, name: self.spawn(src, look=look, overlay_id=oid, name=name))
+            self._hub.spawn_requested.connect(lambda src, look, oid, name, geom=None: self.spawn(src, look=look, overlay_id=oid, name=name, geometry=geom))
             self._hub.bring_front_requested.connect(self._bring_overlay_to_front)
             self._hub.toggle_collapse_requested.connect(lambda w: (w.toggle_collapse(), self._hub.refresh(self._windows)))
             self._hub.toggle_click_through_requested.connect(lambda w: (w.toggle_click_through(), self._hub.refresh(self._windows)))
@@ -159,16 +164,18 @@ class Manager(QObject):
             win.raise_()
             win.activateWindow()
 
-    def spawn(self, source=None, origin=None, look=None, overlay_id=None, name=None):
+    def spawn(self, source=None, origin=None, look=None, overlay_id=None, name=None, geometry=None):
         if look is None:
             look = copy(origin.look if origin else self._look)
         index = len(self._windows) + 1
-        win = OverlayWindow(look, source, index=index, overlay_id=overlay_id, name=name)
+        win = OverlayWindow(look, source, index=index, overlay_id=overlay_id, name=name, geometry=geometry)
         win.closed.connect(self._on_closed)
         win.new_overlay_requested.connect(lambda s: self.show_hub(focus_input=True))
         win.hub_requested.connect(self.show_hub)
 
-        if origin:
+        if geometry and len(geometry) == 4:
+            win.setGeometry(QRect(int(geometry[0]), int(geometry[1]), int(geometry[2]), int(geometry[3])))
+        elif origin:
             full = origin.isMaximized() or origin.isFullScreen()
             g = origin.normalGeometry() if full else origin.geometry()
             win.resize(g.size())

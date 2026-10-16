@@ -2,6 +2,7 @@
 from .base import Viewer
 from .empty import EmptyViewer, UnsupportedViewer
 from .image import ImageViewer
+from .note import CodeEditor, NoteViewer
 from .pdf import PdfViewer
 from .text import TextViewer
 from .web import WebViewer
@@ -23,4 +24,5 @@ def create_viewer(source: str) -> Viewer:
     raise ValueError("Lucent can't preview this yet. Try a PDF, an image, a web link or a text file.")
 
 
-__all__ = ["Viewer", "EmptyViewer", "UnsupportedViewer", "create_viewer", "FILE_FILTER"]
+__all__ = ["Viewer", "EmptyViewer", "UnsupportedViewer", "NoteViewer", "CodeEditor", "create_viewer", "FILE_FILTER"]
+

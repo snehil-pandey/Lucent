@@ -1,6 +1,7 @@
 from PySide6.QtGui import QColor
 
 TEXT = "#e6eefc"
+TEXT_MUTED = "rgba(230, 238, 252, 150)"
 
 
 def _c(hue: int, s: float, l: float) -> QColor:
@@ -17,6 +18,33 @@ def chrome(hue: int) -> QColor:
 
 def accent(hue: int) -> QColor:
     return _c(hue, 0.85, 0.62)
+
+
+def toolbutton_stylesheet() -> str:
+    return f"""
+        QToolButton {{
+            background: transparent;
+            border: none;
+            border-radius: 4px;
+            color: {TEXT};
+            font-family: "Segoe MDL2 Assets";
+            font-size: 10pt;
+        }}
+        QToolButton:hover {{
+            background: rgba(255, 255, 255, 0.12);
+        }}
+        QToolButton:pressed {{
+            background: rgba(255, 255, 255, 0.20);
+        }}
+        QToolButton#close:hover, QToolButton#ItemBtnClose:hover {{
+            background: rgba(255, 255, 255, 0.12);
+            color: #e81123;
+        }}
+        QToolButton#close:pressed, QToolButton#ItemBtnClose:pressed {{
+            background: rgba(255, 255, 255, 0.20);
+            color: #e81123;
+        }}
+    """
 
 
 def scrollbar_stylesheet(hue: int) -> str:

@@ -31,8 +31,14 @@ def main() -> int:
         manager._launch()
     else:
         manager.start()
-    return app.exec()
+    try:
+        return app.exec()
+    except KeyboardInterrupt:
+        return 0
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    try:
+        sys.exit(main())
+    except KeyboardInterrupt:
+        sys.exit(0)
