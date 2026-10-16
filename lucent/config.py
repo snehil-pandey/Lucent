@@ -140,3 +140,15 @@ def delete_overlay_record(overlay_id: str) -> list:
     items = [it for it in items if it.get("id") != overlay_id]
     save_overlay_registry(items)
     return items
+
+
+def get_storage_locations() -> dict:
+    from PySide6.QtCore import QStandardPaths
+    cache_dir = QStandardPaths.writableLocation(QStandardPaths.StandardLocation.CacheLocation)
+    appdata_dir = QStandardPaths.writableLocation(QStandardPaths.StandardLocation.AppDataLocation)
+    config_file = _settings().fileName()
+    return {
+        "cache": cache_dir,
+        "appdata": appdata_dir,
+        "config": config_file,
+    }

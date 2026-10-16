@@ -110,25 +110,16 @@ class OverlayListItem(QFrame):
         actions_lay.setSpacing(4)
 
         if self.overlay is not None:
-            # Controls for Active Overlays (using Segoe MDL2 Assets glyphs with fallbacks)
+            # Controls for Active Overlays (3 buttons matching inactive card layout)
             self.btn_front = self._make_btn(GLYPH.get("view", "👁"), "Bring Overlay to Front")
-            self.btn_ghost = self._make_btn(GLYPH.get("click_through", "👻"), "Toggle Click-Through / Ghost Mode")
-            self.btn_collapse = self._make_btn(GLYPH.get("collapse", "▲"), "Toggle Collapse / Expand")
-            self.btn_settings = self._make_btn(GLYPH.get("settings", "⚙"), "Overlay Settings")
             self.btn_rename = self._make_btn(GLYPH.get("edit", "✎"), "Rename Overlay")
             self.btn_close = self._make_btn(GLYPH.get("close", "✕"), "Close Window", is_close=True)
 
             self.btn_front.clicked.connect(lambda: self.bring_front_requested.emit(self.overlay))
-            self.btn_ghost.clicked.connect(lambda: self.toggle_click_through_requested.emit(self.overlay))
-            self.btn_collapse.clicked.connect(lambda: self.toggle_collapse_requested.emit(self.overlay))
-            self.btn_settings.clicked.connect(lambda: self.open_settings_requested.emit(self.overlay, self.btn_settings))
             self.btn_rename.clicked.connect(self._prompt_rename)
             self.btn_close.clicked.connect(lambda: self.close_requested.emit(self.overlay))
 
             actions_lay.addWidget(self.btn_front)
-            actions_lay.addWidget(self.btn_ghost)
-            actions_lay.addWidget(self.btn_collapse)
-            actions_lay.addWidget(self.btn_settings)
             actions_lay.addWidget(self.btn_rename)
             actions_lay.addWidget(self.btn_close)
         else:
@@ -453,10 +444,24 @@ class HubWindow(QWidget):
 
         body_lay.addWidget(self.scroll, 1)
 
-        # Footer with status
+        # Footer with status and cache location
+        footer_row = QHBoxLayout()
         self.lbl_status = QLabel("0 overlays recorded")
         self.lbl_status.setObjectName("StatusLabel")
-        body_lay.addWidget(self.lbl_status)
+        footer_row.addWidget(self.lbl_status)
+        footer_row.addStretch(1)
+
+        from .config import get_storage_locations
+        locs = get_storage_locations()
+        cache_path = locs.get("cache", "")
+        self.lbl_cache_info = QLabel("Cache: Local")
+        self.lbl_cache_info.setObjectName("StatusLabel")
+        self.lbl_cache_info.setToolTip(f"Lucent Cache Directory:\n{cache_path}\n(Click to copy path)")
+        self.lbl_cache_info.setCursor(Qt.PointingHandCursor)
+        self.lbl_cache_info.mousePressEvent = lambda e: QGuiApplication.clipboard().setText(cache_path)
+        footer_row.addWidget(self.lbl_cache_info)
+
+        body_lay.addLayout(footer_row)
 
         root.addWidget(body, 1)
 
@@ -626,10 +631,8 @@ class HubWindow(QWidget):
 
     def refresh(self, active_windows):
         """Rebuild list showing ALL overlays (active + inactive/saved in past)."""
-        # Sync current default hue
+        # Hub's master/parent default hue
         cur_hue = load_look().hue
-        if active_windows:
-            cur_hue = active_windows[-1].look.hue
         if cur_hue != self._hue:
             self.apply_theme(cur_hue)
 

@@ -26,6 +26,7 @@ class SettingsPopup(QFrame):
 
     def __init__(self, parent=None):
         super().__init__(parent, Qt.Popup | Qt.FramelessWindowHint)
+        self.setObjectName("SettingsPopup")
         self.setAttribute(Qt.WA_StyledBackground, True)
         self.setFixedWidth(290)
         self._hide_capture = True
@@ -85,6 +86,19 @@ class SettingsPopup(QFrame):
         lay.addWidget(self.chk_top)
         lay.addWidget(self.chk_click)
         lay.addWidget(self.chk_capture)
+
+        # Cache & Storage Location section
+        from .config import get_storage_locations
+        locs = get_storage_locations()
+        cache_path = locs.get("cache", "")
+
+        self.lbl_cache = QLabel(f"Cache: {cache_path}")
+        self.lbl_cache.setObjectName("CacheLabel")
+        self.lbl_cache.setToolTip(f"App Cache Location:\n{cache_path}\n(Click to copy path)")
+        self.lbl_cache.setCursor(Qt.PointingHandCursor)
+        self.lbl_cache.mousePressEvent = lambda e: QGuiApplication.clipboard().setText(cache_path)
+        lay.addSpacing(2)
+        lay.addWidget(self.lbl_cache)
 
         btn = QPushButton("New overlay")
         btn.clicked.connect(self.new_overlay)
@@ -156,10 +170,25 @@ class SettingsPopup(QFrame):
         acc = theme.accent(hue).name()
         bg = theme.background(hue).lighter(115).name()
         self.setStyleSheet(f"""
-            SettingsPopup {{ background: {bg}; border: 1px solid {acc}; }}
+            QFrame#SettingsPopup, SettingsPopup {{
+                background: {bg};
+                border: 1px solid {acc};
+                border-radius: 4px;
+            }}
             QLabel {{ color: {theme.TEXT}; font: 9.5pt "Segoe UI"; }}
             QLabel#head {{ font: 600 11pt "Segoe UI"; }}
             QLabel#value {{ color: rgba(230,238,252,150); }}
+            QLabel#CacheLabel {{
+                color: rgba(230,238,252,140);
+                font-size: 7.5pt;
+                padding: 4px 6px;
+                background: rgba(255,255,255,0.05);
+                border-radius: 4px;
+            }}
+            QLabel#CacheLabel:hover {{
+                color: {theme.TEXT};
+                background: rgba(255,255,255,0.10);
+            }}
             QCheckBox {{ color: {theme.TEXT}; font: 9.5pt "Segoe UI"; spacing: 8px; }}
             QSlider::groove:horizontal {{ height: 6px; border-radius: 3px; background: rgba(255,255,255,0.18); }}
             QSlider::sub-page:horizontal {{ background: {acc}; border-radius: 3px; }}

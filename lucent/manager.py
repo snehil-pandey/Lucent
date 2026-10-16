@@ -166,7 +166,8 @@ class Manager(QObject):
 
     def spawn(self, source=None, origin=None, look=None, overlay_id=None, name=None, geometry=None):
         if look is None:
-            look = copy(origin.look if origin else self._look)
+            parent_default = load_look()
+            look = copy(origin.look if origin else parent_default)
         index = len(self._windows) + 1
         win = OverlayWindow(look, source, index=index, overlay_id=overlay_id, name=name, geometry=geometry)
         win.closed.connect(self._on_closed)

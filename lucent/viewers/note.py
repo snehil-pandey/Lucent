@@ -143,14 +143,22 @@ class CodeEditor(QPlainTextEdit):
 
     def line_number_area_paint_event(self, event):
         painter = QPainter(self.line_number_area)
-        painter.fillRect(event.rect(), QColor(15, 20, 30, 80))
+        # Subtle tinted gutter backdrop
+        painter.fillRect(event.rect(), QColor(0, 0, 0, 50))
+
+        # Calculate exact negative (inverted) color of the active theme background
+        bg = theme.background(self._hue)
+        inv_r = 255 - bg.red()
+        inv_g = 255 - bg.green()
+        inv_b = 255 - bg.blue()
+        line_num_color = QColor(inv_r, inv_g, inv_b, 225)
 
         block = self.firstVisibleBlock()
         block_number = block.blockNumber()
         top = self.blockBoundingGeometry(block).translated(self.contentOffset()).top()
         bottom = top + self.blockBoundingRect(block).height()
 
-        painter.setPen(QColor(theme.TEXT_MUTED))
+        painter.setPen(line_num_color)
         painter.setFont(self.font())
 
         while block.isValid() and top <= event.rect().bottom():
@@ -195,6 +203,7 @@ class NoteViewer(Viewer):
 
     def apply_theme(self, hue: int):
         self._hue = hue
+        self.editor._hue = hue
         acc = theme.accent(hue).name()
         self.highlighter.set_hue(hue)
         self.editor.setStyleSheet(f"""
@@ -207,6 +216,7 @@ class NoteViewer(Viewer):
             {theme.scrollbar_stylesheet(hue)}
         """)
         self.editor.highlight_current_line()
+        self.editor.line_number_area.update()
 
     def set_text(self, text: str):
         self.editor.setPlainText(text)

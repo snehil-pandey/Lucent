@@ -103,8 +103,18 @@ class TitleBar(QWidget):
 
     def apply_theme(self, hue: int):
         acc = theme.accent(hue).name()
+        ch = theme.chrome(hue)
+        ch_top = f"rgba({ch.red()}, {ch.green()}, {ch.blue()}, 0.94)"
+        ch_mid = f"rgba({ch.red()}, {ch.green()}, {ch.blue()}, 0.72)"
+        ch_bottom = f"rgba({ch.red()}, {ch.green()}, {ch.blue()}, 0.05)"
         self.setStyleSheet(f"""
-            TitleBar {{ background: {theme.chrome(hue).name()}; }}
+            TitleBar {{
+                background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+                    stop:0.0 {ch_top},
+                    stop:0.75 {ch_mid},
+                    stop:1.0 {ch_bottom});
+                border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+            }}
             QLabel#title {{ color: {theme.TEXT}; font: 600 9.5pt "Segoe UI"; }}
             QToolButton {{ background: transparent; border: none; color: {theme.TEXT};
                 font-family: "Segoe MDL2 Assets"; font-size: 10pt; }}
