@@ -143,7 +143,7 @@ Lucent/
 
 ## 📖 In-Depth User Guide
 
-For a complete walkthrough of all features, workflows, shortcut combinations, and storage details, see [USER_GUIDE.md](file:///S:/Windows/Lucent/USER_GUIDE.md).
+For a complete walkthrough of all features, workflows, shortcut combinations, and storage details, see [USER_GUIDE.md](USER_GUIDE.md).
 
 ---
 

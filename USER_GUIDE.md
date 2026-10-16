@@ -29,13 +29,13 @@
 ## 1. Overview & Core Architecture
 
 Lucent is organized into two primary windows:
-* **The Hub (`HubWindow`)**: A central management panel listing all active and previously saved overlays, offering search, inline renaming, restoration, and deletion.
-* **The Overlays (`OverlayWindow`)**: Floating, frameless, translucent viewports that hover above your desktop and apps.
+* **The Hub (`HubWindow`)**: Defined in [`lucent/hub.py`](lucent/hub.py), a central management panel listing all active and previously saved overlays, offering search, inline renaming, restoration, and deletion.
+* **The Overlays (`OverlayWindow`)**: Defined in [`lucent/overlay.py`](lucent/overlay.py), floating, frameless, translucent viewports that hover above your desktop and apps.
 
 ### Core Philosophy
-- **Unified Single-Hue Palette**: Every background, panel, card, input, and border dynamically calculates its color from a single hue value ($0^\circ - 359^\circ$) via `theme.py`.
+- **Unified Single-Hue Palette**: Every background, panel, card, input, and border dynamically calculates its color from a single hue value ($0^\circ - 359^\circ$) via [`lucent/theme.py`](lucent/theme.py).
 - **Faceted Geometry**: Angular chamfered edges with zero rounded radii across all windows and controls.
-- **Hover Non-Disruptive Title Bar**: The titlebar only fades in when your cursor approaches the top edge (or while typing in the address bar). It floats over the viewport without displacing your content.
+- **Hover Non-Disruptive Title Bar**: Implemented in [`lucent/titlebar.py`](lucent/titlebar.py), the titlebar only fades in when your cursor approaches the top edge (or while typing in the address bar). It floats over the viewport without displacing your content.
 
 ---
 
@@ -107,12 +107,12 @@ Located in the Windows notification area:
 
 | Viewer | Formats / Schemes | Key Features & Controls |
 | :--- | :--- | :--- |
-| **PDF Viewer** | `.pdf` | Multi-page rendering; `Ctrl + Wheel` zooming; `PageUp` / `PageDown` or `Up` / `Down` page navigation. |
-| **Image Viewer** | `.png`, `.jpg`, `.jpeg`, `.gif`, `.bmp`, `.webp`, `.svg`, `.ico`, `.tiff` | Middle-click canvas panning; `Ctrl + Wheel` zoom; `R` / `Shift + R` 90° clockwise/counter-clockwise rotation. |
-| **Text Viewer** | `.txt`, `.md`, `.json`, `.log`, `.csv`, `.py`, `.js`, etc. | Monospaced syntax display; scrollable; dark/light inversion mode support. |
-| **Sticky Note** | Built-in editor | Translucent note editor; real-time line numbers rendered in the exact negative contrast of the background (`255 - R, 255 - G, 255 - B`). |
-| **Web Viewer** | `http://`, `https://` | Full Chromium engine (QtWebEngine) with persistent profile cookies and cache in `~/.lucent_web_profile`. |
-| **Empty Canvas** | Initial drop zone | Clean drop zone: *"Drop a file here, or press Ctrl+V to paste a link"*. |
+| **[PDF Viewer](lucent/viewers/pdf.py)** | `.pdf` | Multi-page rendering; `Ctrl + Wheel` zooming; `PageUp` / `PageDown` or `Up` / `Down` page navigation. |
+| **[Image Viewer](lucent/viewers/image.py)** | `.png`, `.jpg`, `.jpeg`, `.gif`, `.bmp`, `.webp`, `.svg`, `.ico`, `.tiff` | Middle-click canvas panning; `Ctrl + Wheel` zoom; `R` / `Shift + R` 90° clockwise/counter-clockwise rotation. |
+| **[Text Viewer](lucent/viewers/text.py)** | `.txt`, `.md`, `.json`, `.log`, `.csv`, `.py`, `.js`, etc. | Monospaced syntax display; scrollable; dark/light inversion mode support. |
+| **[Sticky Note](lucent/viewers/note.py)** | Built-in editor | Translucent note editor; real-time line numbers rendered in the exact negative contrast of the background (`255 - R, 255 - G, 255 - B`). |
+| **[Web Viewer](lucent/viewers/web.py)** | `http://`, `https://` | Full Chromium engine (QtWebEngine) with persistent profile cookies and cache in `~/.lucent_web_profile`. |
+| **[Empty Canvas](lucent/viewers/empty.py)** | Initial drop zone | Clean drop zone: *"Drop a file here, or press Ctrl+V to paste a link"*. |
 
 ---
 
@@ -192,7 +192,7 @@ Using the Windows User32 `SetWindowDisplayAffinity` API, Lucent can exclude over
 
 ## 7. Known Limitations & Troubleshooting
 
-*(Derived from `LIMITATIONS.md`)*
+*(Derived from [LIMITATIONS.md](LIMITATIONS.md))*
 
 1. **Elevated (Administrator) Windows**:
    - In Windows, UIPI (User Interface Privilege Isolation) prevents standard user processes from receiving hotkeys or placing transparent overlays over elevated apps (e.g., Task Manager or an admin command prompt).
