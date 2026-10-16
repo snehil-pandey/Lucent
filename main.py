@@ -24,7 +24,20 @@ def main() -> int:
 
     args = sys.argv[1:]
     skip_splash = ("--quick" in args) or ("--no-splash" in args)
-    clean_args = [a for a in args if a not in ("--quick", "--no-splash")]
+    clean_args = []
+    i = 0
+    while i < len(args):
+        a = args[i]
+        if a in ("--quick", "--no-splash"):
+            i += 1
+            continue
+        if a == "--set-cache" and i + 1 < len(args):
+            from lucent.config import set_cache_location
+            set_cache_location(args[i + 1])
+            i += 2
+            continue
+        clean_args.append(a)
+        i += 1
 
     manager = Manager(clean_args)
     if skip_splash:

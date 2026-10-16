@@ -142,9 +142,26 @@ def delete_overlay_record(overlay_id: str) -> list:
     return items
 
 
+def get_cache_location() -> str:
+    s = _settings()
+    custom = s.value("cache_location", None)
+    if custom and isinstance(custom, str) and custom.strip():
+        return custom.strip()
+    from PySide6.QtCore import QStandardPaths
+    return QStandardPaths.writableLocation(QStandardPaths.StandardLocation.CacheLocation)
+
+
+def set_cache_location(path: Optional[str]) -> None:
+    s = _settings()
+    if path and path.strip():
+        s.setValue("cache_location", path.strip())
+    else:
+        s.remove("cache_location")
+
+
 def get_storage_locations() -> dict:
     from PySide6.QtCore import QStandardPaths
-    cache_dir = QStandardPaths.writableLocation(QStandardPaths.StandardLocation.CacheLocation)
+    cache_dir = get_cache_location()
     appdata_dir = QStandardPaths.writableLocation(QStandardPaths.StandardLocation.AppDataLocation)
     config_file = _settings().fileName()
     return {
