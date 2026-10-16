@@ -113,27 +113,37 @@ python main.py https://example.com
 ```text
 Lucent/
 ├── lucent/
-│   ├── viewers/            # Viewer implementations (PDF, Image, Text, Web, Empty)
+│   ├── viewers/            # Viewer implementations (PDF, Image, Text, Note, Web, Empty)
 │   │   ├── base.py
 │   │   ├── empty.py
 │   │   ├── image.py
+│   │   ├── note.py
 │   │   ├── pdf.py
 │   │   ├── text.py
 │   │   └── web.py
-│   ├── config.py           # Settings management & Look configuration
+│   ├── config.py           # Settings management, Look configuration & storage paths
+│   ├── hub.py              # Central Hub window to manage and inspect overlays
 │   ├── icon.py             # Custom vector moon icon painter
 │   ├── manager.py          # Multi-window and overlay lifecycle manager
 │   ├── overlay.py          # Main floating overlay window widget
 │   ├── settings_popup.py   # Pop-up controls (opacity, hue, on-top, capture)
 │   ├── sources.py          # Input parser (paths, URLs, searches)
 │   ├── splash.py           # Animated glowing crescent splash screen
-│   ├── theme.py            # Dynamic CSS/QSS styling engine
+│   ├── theme.py            # Dynamic single-hue CSS/QSS styling engine
 │   ├── titlebar.py         # Custom frameless title bar and address input
 │   └── winapi.py           # Windows display affinity & taskbar integrations
 ├── main.py                 # Application entry point
 ├── requirements.txt        # Python package dependencies
-└── README.md               # Documentation
+├── USER_GUIDE.md           # Comprehensive user manual & operation guide
+├── LIMITATIONS.md          # Technical constraints and edge cases
+└── README.md               # Quick-start documentation
 ```
+
+---
+
+## 📖 In-Depth User Guide
+
+For a complete walkthrough of all features, workflows, shortcut combinations, and storage details, see [USER_GUIDE.md](file:///S:/Windows/Lucent/USER_GUIDE.md).
 
 ---
 
