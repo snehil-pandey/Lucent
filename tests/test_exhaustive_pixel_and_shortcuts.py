@@ -1,6 +1,6 @@
 import pytest
 from PySide6.QtCore import Qt, QPoint
-from PySide6.QtGui import QColor, QMouseEvent
+from PySide6.QtGui import QColor, QGuiApplication, QMouseEvent
 from lucent.config import Look
 from lucent.overlay import OverlayWindow, EDGE
 from lucent import theme
@@ -102,13 +102,41 @@ def test_all_shortcuts_trigger_actions(qtbot, overlay):
     qtbot.keyClick(overlay, Qt.Key_K, Qt.ControlModifier)
     assert overlay._collapsed is False
 
-    # Alt+1 to Alt+5 (Snap Layout Presets)
+    # Ctrl+M / Ctrl+Alt+M (Click-through / Ghost toggle)
+    assert overlay.look.click_through is False
+    qtbot.keyClick(overlay, Qt.Key_M, Qt.ControlModifier)
+    assert overlay.look.click_through is True
+    qtbot.keyClick(overlay, Qt.Key_M, Qt.ControlModifier | Qt.AltModifier)
+    assert overlay.look.click_through is False
+
+    # Alt+1 to Alt+5 (Snap Layout Presets exhaustive verification)
     qtbot.keyClick(overlay, Qt.Key_1, Qt.AltModifier) # bottom-left
     pos_bl = overlay.pos()
+    qtbot.keyClick(overlay, Qt.Key_2, Qt.AltModifier) # bottom-right
+    pos_br = overlay.pos()
+    qtbot.keyClick(overlay, Qt.Key_3, Qt.AltModifier) # top-left
+    pos_tl = overlay.pos()
     qtbot.keyClick(overlay, Qt.Key_4, Qt.AltModifier) # top-right
     pos_tr = overlay.pos()
+    qtbot.keyClick(overlay, Qt.Key_5, Qt.AltModifier) # center
+    pos_c = overlay.pos()
+
     assert pos_tr.x() > pos_bl.x()
     assert pos_tr.y() < pos_bl.y()
+    assert pos_br.x() > pos_bl.x()
+    assert pos_tl.y() < pos_bl.y()
+    assert pos_c.x() > pos_tl.x() and pos_c.x() < pos_tr.x()
+
+    # Ctrl+0, F5, Alt+Left, Alt+Right (Viewer actions)
+    qtbot.keyClick(overlay, Qt.Key_0, Qt.ControlModifier)
+    qtbot.keyClick(overlay, Qt.Key_F5)
+    qtbot.keyClick(overlay, Qt.Key_Left, Qt.AltModifier)
+    qtbot.keyClick(overlay, Qt.Key_Right, Qt.AltModifier)
+
+    # Ctrl+V (Clipboard paste test)
+    clipboard = QGuiApplication.clipboard()
+    clipboard.setText("https://example.com")
+    qtbot.keyClick(overlay, Qt.Key_V, Qt.ControlModifier)
 
 
 # =========================================================================
