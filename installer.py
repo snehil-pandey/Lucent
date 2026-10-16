@@ -120,16 +120,19 @@ def create_shortcuts(exe_path: str, install_dir: str) -> None:
         desktop = os.path.join(os.environ["USERPROFILE"], "Desktop")
         start_menu = os.path.join(os.environ["APPDATA"], r"Microsoft\Windows\Start Menu\Programs")
 
+        ico_path = os.path.join(install_dir, "app_icon.ico")
         ps_script = f"""
         $WshShell = New-Object -ComObject WScript.Shell
         $Shortcut = $WshShell.CreateShortcut('{os.path.join(desktop, "Lucent.lnk")}')
         $Shortcut.TargetPath = '{exe_path}'
         $Shortcut.WorkingDirectory = '{install_dir}'
+        if (Test-Path '{ico_path}') {{ $Shortcut.IconLocation = '{ico_path}' }}
         $Shortcut.Save()
 
         $ShortcutSM = $WshShell.CreateShortcut('{os.path.join(start_menu, "Lucent.lnk")}')
         $ShortcutSM.TargetPath = '{exe_path}'
         $ShortcutSM.WorkingDirectory = '{install_dir}'
+        if (Test-Path '{ico_path}') {{ $ShortcutSM.IconLocation = '{ico_path}' }}
         $ShortcutSM.Save()
         """
         subprocess.run(["powershell", "-NoProfile", "-Command", ps_script], capture_output=True)
@@ -210,7 +213,9 @@ class InstallerWindow(QWidget):
         super().__init__()
         self.bundle_source = bundle_source
         self.setWindowTitle("Lucent Setup & Custom Installer")
-        self.setFixedSize(560, 480)
+        self.setFixedSize(560, 490)
+        from lucent.icon import app_icon, render_overlay_pixmap
+        self.setWindowIcon(app_icon())
         self._init_ui()
 
     def _init_ui(self):
@@ -279,17 +284,28 @@ class InstallerWindow(QWidget):
         layout.setContentsMargins(20, 20, 20, 20)
         layout.setSpacing(14)
 
-        # Header
+        # Header with Moon Icon from icon.py
         header = QFrame()
         header.setObjectName("HeaderCard")
-        h_lay = QVBoxLayout(header)
+        h_lay = QHBoxLayout(header)
         h_lay.setContentsMargins(10, 10, 10, 10)
+        h_lay.setSpacing(14)
+
+        from lucent.icon import render_overlay_pixmap
+        lbl_icon = QLabel()
+        lbl_icon.setPixmap(render_overlay_pixmap(44, "moon"))
+        h_lay.addWidget(lbl_icon)
+
+        text_vlay = QVBoxLayout()
+        text_vlay.setSpacing(4)
         lbl_title = QLabel("Lucent Setup")
         lbl_title.setObjectName("Title")
         lbl_desc = QLabel("Install Lucent transparent overlay viewer with custom directories and integrations.")
         lbl_desc.setStyleSheet("color: #94a3b8; font-size: 12px;")
-        h_lay.addWidget(lbl_title)
-        h_lay.addWidget(lbl_desc)
+        text_vlay.addWidget(lbl_title)
+        text_vlay.addWidget(lbl_desc)
+        h_lay.addLayout(text_vlay, 1)
+
         layout.addWidget(header)
 
         # 1. Install Location
