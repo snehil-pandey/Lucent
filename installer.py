@@ -158,8 +158,9 @@ class InstallWorker(QThread):
             if self.cache_dir:
                 os.makedirs(self.cache_dir, exist_ok=True)
 
-            self.progress.emit(25, "Copying application binaries and Qt runtime...")
-            if os.path.isdir(self.src_bundle_dir):
+            self.progress.emit(25, "Locating application package...")
+            zip_to_extract = None
+            if self.src_bundle_dir and os.path.isdir(self.src_bundle_dir):
                 for item in os.listdir(self.src_bundle_dir):
                     s = os.path.join(self.src_bundle_dir, item)
                     d = os.path.join(self.install_dir, item)
@@ -169,13 +170,42 @@ class InstallWorker(QThread):
                         shutil.copytree(s, d)
                     else:
                         shutil.copy2(s, d)
-            elif zipfile.is_zipfile(self.src_bundle_dir):
-                with zipfile.ZipFile(self.src_bundle_dir, 'r') as zip_ref:
+            elif self.src_bundle_dir and os.path.isfile(self.src_bundle_dir) and zipfile.is_zipfile(self.src_bundle_dir):
+                zip_to_extract = self.src_bundle_dir
+            else:
+                # Check adjacent to installer exe
+                exe_dir = os.path.dirname(os.path.abspath(sys.argv[0]))
+                local_candidates = [
+                    os.path.join(exe_dir, "Lucent-Portable.zip"),
+                    os.path.join(exe_dir, "dist", "Lucent-Portable.zip"),
+                    os.path.join(os.getcwd(), "Lucent-Portable.zip"),
+                    os.path.join(os.getcwd(), "dist", "Lucent-Portable.zip")
+                ]
+                for cand in local_candidates:
+                    if os.path.isfile(cand) and zipfile.is_zipfile(cand):
+                        zip_to_extract = cand
+                        break
+
+                if not zip_to_extract:
+                    # Download release package
+                    self.progress.emit(30, "Fetching package from repository release...")
+                    import urllib.request
+                    download_url = "https://github.com/Pan-Fa/Lucent/releases/latest/download/Lucent-Portable.zip"
+                    temp_zip = os.path.join(self.install_dir, "temp_download.zip")
+                    try:
+                        urllib.request.urlretrieve(download_url, temp_zip)
+                        zip_to_extract = temp_zip
+                    except Exception as err:
+                        raise RuntimeError(f"Could not find local Lucent-Portable.zip and download failed: {err}")
+
+            if zip_to_extract:
+                self.progress.emit(45, "Extracting binaries and Qt runtime...")
+                with zipfile.ZipFile(zip_to_extract, 'r') as zip_ref:
                     zip_ref.extractall(self.install_dir)
+                if zip_to_extract.endswith("temp_download.zip") and os.path.exists(zip_to_extract):
+                    os.remove(zip_to_extract)
 
             target_exe = os.path.join(self.install_dir, "Lucent.exe")
-
-            # Create 'lucent.cmd' wrapper so typing `lucent <args>` in cmd/powershell works seamlessly
             cmd_wrapper = os.path.join(self.install_dir, "lucent.cmd")
             with open(cmd_wrapper, "w") as f:
                 f.write(f'@echo off\nstart "" "{target_exe}" %*\n')
@@ -226,6 +256,10 @@ class InstallerWindow(QWidget):
                 font-family: 'Segoe UI', sans-serif;
                 font-size: 13px;
             }
+            QLabel {
+                background-color: transparent;
+                background: transparent;
+            }
             QFrame#HeaderCard {
                 background-color: #161f2c;
                 border: 1px solid #2563eb;
@@ -235,6 +269,7 @@ class InstallerWindow(QWidget):
                 font-size: 18px;
                 font-weight: bold;
                 color: #60a5fa;
+                background: transparent;
             }
             QLineEdit {
                 background-color: #0b1118;
@@ -264,6 +299,8 @@ class InstallerWindow(QWidget):
             }
             QCheckBox {
                 spacing: 8px;
+                background-color: transparent;
+                background: transparent;
             }
             QCheckBox::indicator {
                 width: 16px;
