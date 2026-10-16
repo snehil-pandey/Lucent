@@ -190,7 +190,7 @@ class InstallWorker(QThread):
                     # Download release package
                     self.progress.emit(30, "Fetching package from repository release...")
                     import urllib.request
-                    download_url = "https://github.com/Pan-Fa/Lucent/releases/latest/download/Lucent-Portable.zip"
+                    download_url = "https://github.com/snehil-pandey/Lucent/releases/latest/download/Lucent-Portable.zip"
                     temp_zip = os.path.join(self.install_dir, "temp_download.zip")
                     try:
                         urllib.request.urlretrieve(download_url, temp_zip)
