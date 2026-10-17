@@ -5,7 +5,7 @@ a = Analysis(
     ['installer.py'],
     pathex=[],
     binaries=[],
-    datas=[('dist/Lucent-Portable.zip', '.'), ('lucent', 'lucent'), ('app_icon.ico', '.')],
+    datas=[('dist/Lucent-Portable.zip', '.'), ('lucent', 'lucent'), ('app_icon.ico', '.'), ('uninstall.py', '.')],
     hiddenimports=[],
     hookspath=[],
     hooksconfig={},

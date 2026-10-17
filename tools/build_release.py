@@ -102,6 +102,22 @@ def build_binaries():
     # 4. Build Full LucentInstaller.exe
     run_cmd("pyinstaller --noconfirm LucentInstaller.spec")
 
+    # 5. Package Linux Distribution Tarball (Lucent-Linux.tar.gz)
+    linux_tar = os.path.join(dist_dir, "Lucent-Linux.tar.gz")
+    if os.path.exists(linux_tar):
+        os.remove(linux_tar)
+    print("Packaging Linux release bundle into Lucent-Linux.tar.gz...")
+    import tarfile
+    with tarfile.open(linux_tar, "w:gz") as tar:
+        # Include lucent package, main.py, requirements.txt, app_icon.png, packaging/, and README
+        for folder in ["lucent", "packaging"]:
+            tar.add(os.path.join(ROOT, folder), arcname=f"Lucent/{folder}")
+        for single_file in ["main.py", "requirements.txt", "app_icon.png", "README.md", "USER_GUIDE.md"]:
+            p = os.path.join(ROOT, single_file)
+            if os.path.isfile(p):
+                tar.add(p, arcname=f"Lucent/{single_file}")
+    print(f"Generated Lucent-Linux.tar.gz ({os.path.getsize(linux_tar)} bytes)")
+
     print("=== Binary Build Complete ===\n")
 
 
@@ -150,6 +166,7 @@ def main():
         installer = os.path.join(dist_dir, "LucentInstaller.exe")
         lite_installer = os.path.join(dist_dir, "LucentInstaller-Lite.exe")
         portable_zip = os.path.join(dist_dir, "Lucent-Portable.zip")
+        linux_tar = os.path.join(dist_dir, "Lucent-Linux.tar.gz")
 
         notes_file = os.path.join(ROOT, "README.md")
         title = f"Lucent {tag_name}"
@@ -158,11 +175,11 @@ def main():
         check_release = subprocess.run(f"gh release view {tag_name}", shell=True, capture_output=True)
         if check_release.returncode == 0:
             print(f"Release {tag_name} already exists. Uploading/replacing assets...")
-            run_cmd(f'gh release upload {tag_name} "{installer}" "{lite_installer}" "{portable_zip}" --clobber')
+            run_cmd(f'gh release upload {tag_name} "{installer}" "{lite_installer}" "{portable_zip}" "{linux_tar}" --clobber')
         else:
             print(f"Creating GitHub release {tag_name}...")
             run_cmd(
-                f'gh release create {tag_name} "{installer}" "{lite_installer}" "{portable_zip}" '
+                f'gh release create {tag_name} "{installer}" "{lite_installer}" "{portable_zip}" "{linux_tar}" '
                 f'--title "{title}" --notes-file "{notes_file}"'
             )
 
