@@ -65,5 +65,17 @@ def test_viewers_factory(qapp, tmp_path):
     viewer = create_viewer(str(txt_file))
     assert isinstance(viewer, TextViewer)
 
+    # Video / media viewer factory test
+    mp4_file = tmp_path / "sample.mp4"
+    mp4_file.write_bytes(b"\x00\x00\x00\x18ftypmp42")
+    v_viewer = create_viewer(str(mp4_file))
+    from lucent.viewers.video import VideoViewer
+    assert isinstance(v_viewer, VideoViewer)
+
+    # Web viewer signal test
+    from lucent.viewers.web import WebViewer
+    w_viewer = WebViewer()
+    assert hasattr(w_viewer, "new_window_requested")
+
     with pytest.raises(ValueError):
         create_viewer(str(tmp_path / "non_existent_file.xyz_unknown"))

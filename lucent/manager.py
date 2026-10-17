@@ -231,7 +231,7 @@ class Manager(QObject):
         index = len(self._windows) + 1
         win = OverlayWindow(look, source, index=index, overlay_id=overlay_id, name=name, geometry=geometry)
         win.closed.connect(self._on_closed)
-        win.new_overlay_requested.connect(lambda s: self.show_hub(focus_input=True))
+        win.new_overlay_requested.connect(lambda s: self.spawn(s, origin=win) if s else self.show_hub(focus_input=True))
         win.hub_requested.connect(self.show_hub)
         win.mode_toggle_requested.connect(self.toggle_mode)
 

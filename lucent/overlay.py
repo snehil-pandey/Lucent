@@ -354,6 +354,8 @@ class OverlayWindow(QWidget):
         viewer.title_changed.connect(self._on_title)
         if hasattr(viewer, "source_changed"):
             viewer.source_changed.connect(self._on_source_changed)
+        if hasattr(viewer, "new_window_requested"):
+            viewer.new_window_requested.connect(self.new_overlay_requested.emit)
 
     def _on_source_changed(self, new_source: str):
         if new_source and new_source != self.current_source:

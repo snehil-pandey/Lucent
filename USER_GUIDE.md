@@ -110,8 +110,9 @@ Located in the Windows notification area:
 | **[PDF Viewer](lucent/viewers/pdf.py)** | `.pdf` | Multi-page rendering; `Ctrl + Wheel` zooming; `PageUp` / `PageDown` or `Up` / `Down` page navigation. |
 | **[Image Viewer](lucent/viewers/image.py)** | `.png`, `.jpg`, `.jpeg`, `.gif`, `.bmp`, `.webp`, `.svg`, `.ico`, `.tiff` | Middle-click canvas panning; `Ctrl + Wheel` zoom; `R` / `Shift + R` 90° clockwise/counter-clockwise rotation. |
 | **[Text Viewer](lucent/viewers/text.py)** | `.txt`, `.md`, `.json`, `.log`, `.csv`, `.py`, `.js`, etc. | Monospaced syntax display; scrollable; dark/light inversion mode support. |
+| **[Video & Audio Viewer](lucent/viewers/video.py)** | `.mp4`, `.webm`, `.mkv`, `.avi`, `.mov`, `.wmv`, `.flv`, `.m4v`, `.mp3`, `.wav`, `.ogg`, `.flac`, `.aac`, `.m4a` | Full media playback via QtMultimedia (FFmpeg backend); Play/Pause (`Space`), seek bar with dynamic timestamps, volume & mute controls, automatic loop playback. |
 | **[Sticky Note](lucent/viewers/note.py)** | Built-in editor | Translucent note editor; real-time line numbers rendered in the exact negative contrast of the background (`255 - R, 255 - G, 255 - B`). |
-| **[Web Viewer](lucent/viewers/web.py)** | `http://`, `https://` | Full Chromium engine (QtWebEngine) with persistent profile cookies and cache in `~/.lucent_web_profile`. |
+| **[Web Viewer](lucent/viewers/web.py)** | `http://`, `https://` | Full Chromium engine (QtWebEngine) with persistent profile cookies and cache in `web_profile`. Interactive popup confirmation dialog when a link or script requests opening in a new tab/window (Current Overlay vs New Overlay vs Block). |
 | **[Empty Canvas](lucent/viewers/empty.py)** | Initial drop zone | Clean drop zone: *"Drop a file here, or press Ctrl+V to paste a link"*. |
 
 ---

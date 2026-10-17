@@ -3,9 +3,14 @@
 All notable changes to this project are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
-## [Unreleased]
+## [0.9.0] - 2026-10-17
 
 ### Added
+- **Hardware-Accelerated Video & Audio Viewer**: Added native media playback support for `.mp4`, `.webm`, `.mkv`, `.avi`, `.mov`, `.wmv`, `.flv`, `.m4v`, `.mp3`, `.wav`, `.ogg`, `.flac`, and `.m4a` with themed play/pause, seek slider, timestamp, mute, volume controls, and auto-looping.
+- **Interactive Browser Popup Confirmation**: In the WebViewer, web links with `target="_blank"` or JavaScript `window.open` trigger an interactive Lucent-themed modal dialog prompting the user whether to open the page in the current overlay, spawn a new overlay window, or block/cancel.
+- **Enhanced Web Compatibility**: Full browser engine capabilities configured including persistent local cookies/storage in `web_profile`, clipboard access, and auto-handled security origins.
+- **Automated Build & Release Pipeline (`tools/build_release.py`)**: End-to-end version bumper, automated test runner, PyInstaller compilation, portable zip packager, installer builder, and release publisher.
+- **Global CLI Version Flag**: Added `--version` / `-v` command-line option displaying the current version dynamically (`v0.9.0`).
 - Light mode. The whole UI (Hub, overlays, title bar, flyouts, notes, PDF backdrop) switches between dark and light. Toggle it with the sun/moon button in the Hub, `Ctrl+Shift+L`, or the tray menu. The choice is remembered.
 - `tools/make_demo.py`: renders a captioned demo video from the real widgets (no screen recorder needed). Run `python tools/make_demo.py demo.mp4`.
 - Hub shows a short hint when there are no overlays yet.

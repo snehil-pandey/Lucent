@@ -9,7 +9,8 @@
 - **Multi-Format Support**:
   - **PDFs**: Full PDF rendering and viewing.
   - **Images**: PNG, JPG/JPEG, GIF, BMP, WebP, SVG, ICO, TIFF.
-  - **Web & URLs**: Embedded browser view via QtWebEngine.
+  - **Video & Audio**: MP4, WebM, MKV, AVI, MOV, WMV, MP3, WAV, OGG, FLAC via hardware-accelerated QtMultimedia.
+  - **Web & URLs**: Full Chromium browser via QtWebEngine with local persistent cookies, permissions handling, and smart popup confirmation prompt (open in current overlay or spawn a new overlay window).
   - **Text / Code**: Plain text, Markdown (`.md`), JSON, logs (`.log`), CSV.
 - **Translucent & Always-on-Top**:
   - Adjustable opacity (with smooth slider and keyboard shortcuts).
@@ -160,13 +161,14 @@ python main.py https://example.com
 ```text
 Lucent/
 ├── lucent/
-│   ├── viewers/            # Viewer implementations (PDF, Image, Text, Note, Web, Empty)
+│   ├── viewers/            # Viewer implementations (PDF, Image, Text, Note, Video, Web, Empty)
 │   │   ├── base.py
 │   │   ├── empty.py
 │   │   ├── image.py
 │   │   ├── note.py
 │   │   ├── pdf.py
 │   │   ├── text.py
+│   │   ├── video.py
 │   │   └── web.py
 │   ├── config.py           # Settings management, Look configuration & storage paths
 │   ├── hub.py              # Central Hub window to manage and inspect overlays

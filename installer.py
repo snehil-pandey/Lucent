@@ -33,6 +33,7 @@ from PySide6.QtWidgets import (
 SUPPORTED_EXTS = [
     ".pdf",
     ".png", ".jpg", ".jpeg", ".gif", ".bmp", ".webp", ".svg", ".ico", ".tiff",
+    ".mp4", ".m4v", ".webm", ".mkv", ".avi", ".mov", ".wmv", ".mp3", ".wav",
     ".txt", ".md", ".json", ".log", ".csv", ".py", ".js", ".html", ".htm"
 ]
 
