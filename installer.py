@@ -466,4 +466,7 @@ def main():
 
 
 if __name__ == "__main__":
+    if sys.platform != "win32":
+        print("This installer is for Windows. On Linux run: packaging/linux/install.sh")
+        sys.exit(1)
     main()

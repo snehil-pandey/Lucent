@@ -27,6 +27,7 @@ class OverlayWindow(QWidget):
     closed = Signal(object)
     new_overlay_requested = Signal(object)   # a source to open, or None for an empty one
     hub_requested = Signal()
+    mode_toggle_requested = Signal()
 
     def __init__(self, look: Look, source=None, index: int = 1, overlay_id: str = None, name: str = None, geometry=None):
         super().__init__()
@@ -134,6 +135,7 @@ class OverlayWindow(QWidget):
         sc("Esc", lambda: self.isFullScreen() and self.toggle_fullscreen())
         sc("Ctrl+N", lambda: self.new_overlay_requested.emit(None))
         sc("Ctrl+H", self.hub_requested.emit)
+        sc("Ctrl+Shift+L", self.mode_toggle_requested.emit)
         sc("Ctrl+O", self.open_dialog)
         sc("Ctrl+W", self.close)
         sc("Ctrl+I", self.toggle_invert_colors)
@@ -259,6 +261,10 @@ class OverlayWindow(QWidget):
             self.setWindowFlag(Qt.WindowTransparentForInput, enabled)
             if was_visible:
                 self.show()
+            if enabled and not winapi.can_unlock_click_through():
+                # No tray and no global hotkey here, so say how to get the mouse back.
+                print("Lucent: click-through is on. Run `lucent --toggle-click-through` "
+                      "(bind it to a shortcut) to turn it off.")
         self.titlebar.set_click_through(enabled)
         self.popup.sync(self.look)
         save_look(self.look)
@@ -551,7 +557,7 @@ class OverlayWindow(QWidget):
             p.drawRoundedRect(badge_rect, 4, 4)
 
             p.setPen(Qt.white)
-            font = QFont("Segoe UI", 8)
+            font = theme.ui_font(8)
             font.setBold(True)
             p.setFont(font)
             p.drawText(badge_rect, Qt.AlignCenter, str(self.index))

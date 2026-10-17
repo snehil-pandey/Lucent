@@ -3,6 +3,7 @@ import os
 from PySide6.QtGui import QFont
 from PySide6.QtWidgets import QFrame, QPlainTextEdit, QVBoxLayout
 
+from .. import theme
 from .base import Viewer
 
 TEXT_EXTS = {".txt", ".md", ".log", ".json", ".csv", ".ini", ".cfg", ".yaml", ".yml",
@@ -29,8 +30,8 @@ class TextViewer(Viewer):
         self._edit = QPlainTextEdit(self)
         self._edit.setReadOnly(True)
         self._edit.setFrameShape(QFrame.NoFrame)
-        self._edit.setFont(QFont("Cascadia Mono", 10))
-        self._edit.setStyleSheet("QPlainTextEdit { background: transparent; color: #e6eefc; padding: 8px; }")
+        self._edit.setFont(theme.mono_font(10))
+        self._edit.setStyleSheet(f"QPlainTextEdit {{ background: transparent; color: {theme.TEXT}; padding: 8px; }}")
         lay = QVBoxLayout(self)
         lay.setContentsMargins(0, 0, 0, 0)
         lay.addWidget(self._edit)
@@ -41,7 +42,7 @@ class TextViewer(Viewer):
         self._edit.setStyleSheet(f"""
             QPlainTextEdit {{
                 background: transparent;
-                color: #e6eefc;
+                color: {theme.TEXT};
                 padding: 10px;
                 selection-background-color: {acc};
             }}

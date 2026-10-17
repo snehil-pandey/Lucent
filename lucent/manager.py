@@ -5,8 +5,9 @@ from PySide6.QtCore import QObject, QPoint, QRect
 from PySide6.QtGui import QAction, QGuiApplication
 from PySide6.QtWidgets import QMenu, QSystemTrayIcon
 
-from .config import (Look, get_recent_sources, load_look, load_session,
-                     save_session)
+from . import theme, winapi
+from .config import (Look, get_recent_sources, load_look, load_mode,
+                     load_session, save_mode, save_session)
 from .hub import HubWindow
 from .icon import app_icon
 from .overlay import OverlayWindow
@@ -24,16 +25,67 @@ class Manager(QObject):
         self._tray = None
         self._menu = None
         self._hub = None
+        theme.set_mode(load_mode())
+        self._pending = []        # IPC commands that arrived during the splash
+        self._hotkey = None
+        self._init_hotkey()
         self._init_tray()
         app = QGuiApplication.instance()
         if app:
             app.aboutToQuit.connect(self._on_app_quit)
 
+    def _init_hotkey(self):
+        """Linux/X11 global Ctrl+Alt+M. (Windows registers it in overlay.py.)"""
+        if not winapi.LINUX:
+            return
+        from .hotkeys import GlobalHotkey
+        self._hotkey = GlobalHotkey(parent=self)
+        self._hotkey.triggered.connect(self.toggle_all_click_through)
+        winapi.UNLOCK_PATHS["hotkey"] = self._hotkey.start()
+
+    def toggle_mode(self):
+        self.set_mode("dark" if theme.is_light() else "light")
+
+    def set_mode(self, mode: str):
+        """Switch the whole app between dark and light and re-theme every window."""
+        theme.set_mode(mode)
+        save_mode(theme.mode())
+        app = QGuiApplication.instance()
+        if app is not None and hasattr(app, "setPalette"):
+            app.setPalette(theme.app_palette(self._look.hue))
+        for w in list(self._windows):
+            w._retheme()
+        if self._hub is not None:
+            self._hub.apply_theme(self._hub._hue)
+            self._hub.refresh(self._windows)
+
+    def handle_command(self, line: str):
+        """Commands from `lucent --toggle-click-through`, `--hub`, `--new` or `lucent <file>`."""
+        if not self._launched:
+            self._pending.append(line)
+            return
+        cmd, _, arg = line.partition(" ")
+        if cmd == "toggle-click-through":
+            self.toggle_all_click_through()
+        elif cmd == "hub":
+            self.show_hub(focus_input=True)
+        elif cmd == "toggle-mode":
+            self.toggle_mode()
+        elif cmd == "new":
+            self.spawn()
+        elif cmd == "open" and arg.strip():
+            self.spawn(arg.strip())
+
     def _init_tray(self):
         if not QSystemTrayIcon.isSystemTrayAvailable():
             return
+        winapi.UNLOCK_PATHS["tray"] = True
+        if winapi.WIN or winapi.UNLOCK_PATHS["hotkey"]:
+            tip = "Lucent (Global: Ctrl+Alt+M to toggle click-through)"
+        else:
+            tip = "Lucent (click to toggle click-through)"
         tray = QSystemTrayIcon(app_icon(), self)
-        tray.setToolTip("Lucent (Global: Ctrl+Alt+M to toggle click-through)")
+        tray.setToolTip(tip)
         self._menu = QMenu()
         self._menu.aboutToShow.connect(self._rebuild_tray_menu)
         tray.setContextMenu(self._menu)
@@ -52,6 +104,10 @@ class Manager(QObject):
         act_toggle_ghost = QAction("Toggle Click-Through (Ctrl+Alt+M)", m)
         act_toggle_ghost.triggered.connect(self.toggle_all_click_through)
         m.addAction(act_toggle_ghost)
+
+        act_mode = QAction("Switch to Dark Mode" if theme.is_light() else "Switch to Light Mode", m)
+        act_mode.triggered.connect(self.toggle_mode)
+        m.addAction(act_mode)
 
         act_new = QAction("New Overlay (Ctrl+N)", m)
         act_new.triggered.connect(lambda: self.spawn())
@@ -116,6 +172,10 @@ class Manager(QObject):
         # Always open the Main App screen on startup with focus on input box; user controls when overlays open
         self.show_hub(focus_input=True)
 
+        pending, self._pending = self._pending, []
+        for line in pending:
+            self.handle_command(line)
+
     def _on_app_quit(self):
         try:
             session_data = []
@@ -173,6 +233,7 @@ class Manager(QObject):
         win.closed.connect(self._on_closed)
         win.new_overlay_requested.connect(lambda s: self.show_hub(focus_input=True))
         win.hub_requested.connect(self.show_hub)
+        win.mode_toggle_requested.connect(self.toggle_mode)
 
         if geometry and len(geometry) == 4:
             win.setGeometry(QRect(int(geometry[0]), int(geometry[1]), int(geometry[2]), int(geometry[3])))

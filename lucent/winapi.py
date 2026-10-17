@@ -1,7 +1,10 @@
-"""Small Windows-only helpers. Everything is a harmless no-op elsewhere."""
+"""Platform helpers. The Win32 calls are no-ops elsewhere; Linux gets its own setup."""
+import os
 import sys
 
 WIN = sys.platform == "win32"
+LINUX = sys.platform.startswith("linux")
+MAC = sys.platform == "darwin"
 
 WDA_NONE = 0x00
 WDA_MONITOR = 0x01             # older Windows: capture shows black instead
@@ -12,6 +15,46 @@ WS_EX_TRANSPARENT = 0x00000020
 WS_EX_LAYERED = 0x00080000
 WS_EX_TOOLWINDOW = 0x00000080
 WS_EX_APPWINDOW = 0x00040000
+
+
+def session_type() -> str:
+    """'x11', 'wayland' or '' (Linux only)."""
+    return os.environ.get("XDG_SESSION_TYPE", "").lower()
+
+
+def platform_setup() -> None:
+    """Call BEFORE QApplication exists.
+
+    Wayland has no protocol for always-on-top, absolute window positions or
+    global shortcuts, which are the whole point of an overlay. Running through
+    XWayland (the xcb backend) restores all three. Set LUCENT_WAYLAND=1 to
+    stay on native Wayland anyway.
+    """
+    if not LINUX or "QT_QPA_PLATFORM" in os.environ or os.environ.get("LUCENT_WAYLAND") == "1":
+        return
+    on_wayland = session_type() == "wayland" or bool(os.environ.get("WAYLAND_DISPLAY"))
+    if on_wayland and os.environ.get("DISPLAY"):
+        os.environ["QT_QPA_PLATFORM"] = "xcb"
+
+
+def post_app_setup(app) -> None:
+    """Call right after QApplication is created."""
+    if LINUX:
+        # Lets the desktop match our window to lucent.desktop (icon, taskbar grouping).
+        app.setDesktopFileName("lucent")
+        app.setApplicationDisplayName("Lucent")
+        if app.platformName() == "wayland":
+            print("Lucent: running on native Wayland - always-on-top and window "
+                  "positioning are not honoured there. Unset LUCENT_WAYLAND to use XWayland.",
+                  file=sys.stderr)
+
+
+# Set by the Manager so a click-through window never becomes impossible to unlock.
+UNLOCK_PATHS = {"tray": False, "hotkey": False}
+
+
+def can_unlock_click_through() -> bool:
+    return WIN or UNLOCK_PATHS["tray"] or UNLOCK_PATHS["hotkey"]
 
 
 def set_app_id(app_id: str) -> None:

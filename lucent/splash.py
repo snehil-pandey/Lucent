@@ -7,7 +7,7 @@ from PySide6.QtGui import (QBrush, QColor, QFont, QGuiApplication, QPainter,
                            QRadialGradient)
 from PySide6.QtWidgets import QWidget
 
-from . import winapi
+from . import theme, winapi
 from .icon import draw_moon
 
 
@@ -111,7 +111,7 @@ class Splash(QWidget):
                   progress=prog, glow=glow, opacity=_clamp(t / 0.18), rotation=-70 * (1 - prog))
 
         ta = _smooth((t - 0.5) / 0.25)
-        font = QFont("Segoe UI", 26)
+        font = theme.ui_font(26)
         font.setWeight(QFont.Weight.Light)
         font.setLetterSpacing(QFont.SpacingType.AbsoluteSpacing, 9)
         p.setFont(font)

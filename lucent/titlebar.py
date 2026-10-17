@@ -4,35 +4,14 @@ import sys
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtWidgets import QHBoxLayout, QLabel, QLineEdit, QToolButton, QWidget
 
-from . import theme
+from . import glyphs, theme
 from .icon import app_icon
 
-WIN = sys.platform == "win32"
-GLYPH = {
-    "new": "\uE710" if WIN else "+",
-    "open": "\uE8E5" if WIN else "▤",
-    "hub": "\uE8C0" if WIN else "🗈",
-    "invert": "\uE793" if WIN else "◐",
-    "settings": "\uE713" if WIN else "⚙",
-    "click_through": "\uE790" if WIN else "👻",
-    "collapse": "\uE70E" if WIN else "▲",
-    "expand": "\uE70D" if WIN else "▼",
-    "full": "\uE740" if WIN else "⛶",
-    "full_exit": "\uE73F" if WIN else "⛶",
-    "min": "\uE921" if WIN else "–",
-    "max": "\uE922" if WIN else "□",
-    "restore": "\uE923" if WIN else "❐",
-    "close": "\uE8BB" if WIN else "✕",
-    "edit": "\uE70F" if WIN else "✎",
-    "delete": "\uE74D" if WIN else "✕",
-    "play": "\uE768" if WIN else "▶",
-    "view": "\uE7B3" if WIN else "👁",
-}
 
 
 def _button(glyph, tip, name="", size=(36, 32)):
     b = QToolButton()
-    b.setText(glyph)
+    glyphs.set_glyph(b, glyph, hover="#e81123" if name == "close" else None)
     b.setToolTip(tip)
     b.setObjectName(name)
     b.setFixedSize(*size)
@@ -65,12 +44,12 @@ class TitleBar(QWidget):
         self.title_label = QLabel("Lucent Overlay")
         self.title_label.setObjectName("title")
 
-        self.btn_new = _button(GLYPH["new"], "Add new overlay  (Ctrl+N)", "tool")
-        self.btn_collapse = _button(GLYPH["collapse"], "Collapse to icon  (Ctrl+K)", "tool")
-        self.btn_invert = _button(GLYPH["invert"], "Enhanced Readability / High-Contrast Mode  (Ctrl+I)", "tool")
-        self.btn_ghost = _button(GLYPH["click_through"], "Click-through / Ghost mode  (Ctrl+M)", "tool")
-        self.btn_settings = _button(GLYPH["settings"], "Overlay opacity, hue & options", "tool")
-        self.btn_close = _button(GLYPH["close"], "Close overlay", "close", (44, self.HEIGHT))
+        self.btn_new = _button("new", "Add new overlay  (Ctrl+N)", "tool")
+        self.btn_collapse = _button("collapse", "Collapse to icon  (Ctrl+K)", "tool")
+        self.btn_invert = _button("invert", "Enhanced Readability / High-Contrast Mode  (Ctrl+I)", "tool")
+        self.btn_ghost = _button("click_through", "Click-through / Ghost mode  (Ctrl+M)", "tool")
+        self.btn_settings = _button("settings", "Overlay opacity, hue & options", "tool")
+        self.btn_close = _button("close", "Close overlay", "close", (44, self.HEIGHT))
 
         self.btn_new.clicked.connect(self.new_overlay)
         self.btn_collapse.clicked.connect(self.collapse_clicked)
@@ -93,12 +72,12 @@ class TitleBar(QWidget):
         self.logo.setPixmap(pm)
 
     def set_click_through(self, active: bool):
-        self.btn_ghost.setStyleSheet("color: #4ade80;" if active else "")
+        glyphs.recolor(self.btn_ghost, "#4ade80" if active else None)
         self.btn_ghost.setToolTip("Click-through active (Ctrl+M to unlock)" if active else "Click-through / Ghost mode  (Ctrl+M)")
 
     def set_inverted(self, inverted: bool):
         self._inverted = inverted
-        self.btn_invert.setStyleSheet("color: #38bdf8; font-weight: bold;" if inverted else "")
+        glyphs.recolor(self.btn_invert, "#38bdf8" if inverted else None)
         self.btn_invert.setToolTip("Enhanced Readability active (Ctrl+I)" if inverted else "Enhanced Readability / High-Contrast Mode  (Ctrl+I)")
 
     def apply_theme(self, hue: int):
@@ -113,16 +92,16 @@ class TitleBar(QWidget):
                     stop:0.0 {ch_top},
                     stop:0.75 {ch_mid},
                     stop:1.0 {ch_bottom});
-                border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+                border-bottom: 1px solid {theme.fg(0.04)};
             }}
-            QLabel#title {{ color: {theme.TEXT}; font: 600 9.5pt "Segoe UI"; }}
-            QToolButton {{ background: transparent; border: none; color: {theme.TEXT};
-                font-family: "Segoe MDL2 Assets"; font-size: 10pt; }}
-            QToolButton:hover {{ background: rgba(255,255,255,0.12); }}
-            QToolButton:pressed {{ background: rgba(255,255,255,0.20); }}
-            QToolButton#close:hover {{ background: rgba(255,255,255,0.12); color: #e81123; }}
-            QToolButton#close:pressed {{ background: rgba(255,255,255,0.20); color: #e81123; }}
+            QLabel#title {{ color: {theme.TEXT}; font-family: {theme.FONT_UI}; font-size: 9.5pt; font-weight: 600; }}
+            QToolButton {{ background: transparent; border: none; color: {theme.TEXT}; }}
+            QToolButton:hover {{ background: {theme.fg(0.12)}; }}
+            QToolButton:pressed {{ background: {theme.fg(0.20)}; }}
+            QToolButton#close:hover {{ background: {theme.fg(0.12)}; color: #e81123; }}
+            QToolButton#close:pressed {{ background: {theme.fg(0.20)}; color: #e81123; }}
         """)
+        glyphs.refresh(self)
 
     # window dragging ----------------------------------------------------
     def mousePressEvent(self, e):

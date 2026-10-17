@@ -1,1 +1,3 @@
 PySide6>=6.6
+# Linux/X11 only: system-wide Ctrl+Alt+M. Optional; without it use the tray icon or `lucent --toggle-click-through`.
+pynput>=1.7; sys_platform == "linux"

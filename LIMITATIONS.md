@@ -7,14 +7,17 @@ This document outlines the current technical limitations, edge cases, and design
 ## 1. Operating System & Platform Dependencies
 
 - **Screen Capture Exclusion (`WDA_EXCLUDEFROMCAPTURE`)**:
-  - Relies on Windows User32 `SetWindowDisplayAffinity`.
-  - *Fallback*: Non-Windows platforms cleanly bypass this without crashing, and checkboxes in Settings are dynamically disabled with explanatory tooltips.
+  - Relies on Windows User32 `SetWindowDisplayAffinity`. It does not hide a window from a phone camera or a hardware capture card.
+  - *Linux*: not possible. X11 and Wayland compositors offer no way to exclude one window from capture, so the option is disabled with a tooltip. Anything recording the screen will see the overlay.
 - **Click-Through Mode (`WS_EX_TRANSPARENT` & `WS_EX_LAYERED`)**:
   - On Windows, uses native `WS_EX_TRANSPARENT` so clicks pass straight to underlying applications.
-  - *Fallback*: On Linux/macOS, falls back to Qt's native `Qt.WindowTransparentForInput` window flag, ensuring click-through works across all supported Qt desktop platforms.
+  - *Linux*: uses Qt's `Qt.WindowTransparentForInput` flag. The whole window ignores the mouse, including the title bar, so unlocking has to come from the tray icon, `Ctrl+Alt+M` (X11), or `lucent --toggle-click-through`. If none of those is available, Lucent prints a reminder when you turn click-through on.
 - **Global & Local Hotkeys**:
   - On Windows, uses system-wide `RegisterHotKey` (`Ctrl+Alt+M`) so click-through can be unlocked even when the window is unfocused.
-  - *Fallback*: Both `Ctrl+Alt+M` and `Ctrl+M` are also registered as local application shortcuts, and the System Tray icon provides universal single-click toggle access on all OSes.
+  - *Linux/X11*: a global `Ctrl+Alt+M` through `pynput`. *Wayland*: not possible by design. Bind `lucent --toggle-click-through` to a key instead.
+  - `Ctrl+Alt+M` and `Ctrl+M` are also local shortcuts, and the tray icon toggles click-through everywhere a tray exists (GNOME needs the AppIndicator extension).
+- **Wayland**: Lucent switches to XWayland automatically because native Wayland ignores always-on-top and window positions. Set `LUCENT_WAYLAND=1` to opt out.
+- **Compositing**: transparency on Linux needs a compositing window manager. Without one, windows draw opaque.
 
 ---
 

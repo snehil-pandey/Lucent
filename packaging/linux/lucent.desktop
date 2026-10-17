@@ -1,0 +1,12 @@
+[Desktop Entry]
+Type=Application
+Name=Lucent
+GenericName=Overlay Viewer
+Comment=Transparent always-on-top viewer for PDFs, images, notes and web pages
+Exec=lucent %U
+Icon=lucent
+Terminal=false
+Categories=Utility;Viewer;
+StartupWMClass=lucent
+MimeType=application/pdf;image/png;image/jpeg;image/webp;image/gif;text/plain;text/markdown;
+Keywords=overlay;pdf;transparent;always on top;

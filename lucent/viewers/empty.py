@@ -2,6 +2,7 @@ from PySide6.QtCore import QRectF, Qt
 from PySide6.QtGui import QColor, QFont, QPainter
 from PySide6.QtWidgets import QLabel, QVBoxLayout
 
+from .. import theme
 from ..icon import draw_moon
 from .base import Viewer
 
@@ -16,13 +17,13 @@ class EmptyViewer(Viewer):
         s = max(60.0, min(220.0, min(w, h) * 0.32))
         draw_moon(p, QRectF((w - s) / 2, h / 2 - s * 0.9, s, s), opacity=0.25)
 
-        f = QFont("Segoe UI", 13)
+        f = theme.ui_font(13)
         p.setFont(f)
-        p.setPen(QColor(220, 232, 255, 150))
-        p.drawText(QRectF(0, h / 2 + s * 0.15, w, 30), Qt.AlignCenter, "Drop a file here, or paste a link above")
+        p.setPen(QColor(theme.TEXT).darker(100)); p.setOpacity(0.62)
+        p.drawText(QRectF(0, h / 2 + s * 0.15, w, 30), Qt.AlignCenter, "Drop a file here, or press Ctrl+V to paste a link")
         f.setPointSize(9)
         p.setFont(f)
-        p.setPen(QColor(220, 232, 255, 90))
+        p.setPen(QColor(theme.TEXT)); p.setOpacity(0.38)
         p.drawText(QRectF(0, h / 2 + s * 0.15 + 30, w, 24), Qt.AlignCenter,
                    "PDF   ·   Images   ·   Web pages   ·   Text        Ctrl+O to browse")
         p.end()

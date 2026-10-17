@@ -169,3 +169,12 @@ def get_storage_locations() -> dict:
         "appdata": appdata_dir,
         "config": config_file,
     }
+
+
+# UI mode (dark / light) ----------------------------------------------
+def load_mode() -> str:
+    return "light" if str(_settings().value("ui_mode", "dark")).lower() == "light" else "dark"
+
+
+def save_mode(mode: str) -> None:
+    _settings().setValue("ui_mode", "light" if mode == "light" else "dark")

@@ -79,9 +79,11 @@ class SettingsPopup(QFrame):
         self.chk_capture = QCheckBox("Hide from screen recording")
         if not winapi.WIN:
             self.chk_capture.setEnabled(False)
-            self.chk_capture.setToolTip("Only available on Windows")
-            self.chk_click.setEnabled(False)
-            self.chk_click.setToolTip("Only available on Windows")
+            self.chk_capture.setToolTip(
+                "Only available on Windows. Linux compositors have no API to exclude a window from recordings.")
+            if winapi.MAC:
+                self.chk_click.setEnabled(False)
+                self.chk_click.setToolTip("Not available on this platform")
         lay.addSpacing(4)
         lay.addWidget(self.chk_top)
         lay.addWidget(self.chk_click)
@@ -175,22 +177,22 @@ class SettingsPopup(QFrame):
                 border: 1px solid {acc};
                 border-radius: 4px;
             }}
-            QLabel {{ color: {theme.TEXT}; font: 9.5pt "Segoe UI"; }}
-            QLabel#head {{ font: 600 11pt "Segoe UI"; }}
-            QLabel#value {{ color: rgba(230,238,252,150); }}
+            QLabel {{ color: {theme.TEXT}; font-family: {theme.FONT_UI}; font-size: 9.5pt; }}
+            QLabel#head {{ font-family: {theme.FONT_UI}; font-size: 11pt; font-weight: 600; }}
+            QLabel#value {{ color: {theme.TEXT_MUTED}; }}
             QLabel#CacheLabel {{
-                color: rgba(230,238,252,140);
+                color: {theme.TEXT_MUTED};
                 font-size: 7.5pt;
                 padding: 4px 6px;
-                background: rgba(255,255,255,0.05);
+                background: {theme.fg(0.05)};
                 border-radius: 4px;
             }}
             QLabel#CacheLabel:hover {{
                 color: {theme.TEXT};
-                background: rgba(255,255,255,0.10);
+                background: {theme.fg(0.10)};
             }}
-            QCheckBox {{ color: {theme.TEXT}; font: 9.5pt "Segoe UI"; spacing: 8px; }}
-            QSlider::groove:horizontal {{ height: 6px; border-radius: 3px; background: rgba(255,255,255,0.18); }}
+            QCheckBox {{ color: {theme.TEXT}; font-family: {theme.FONT_UI}; font-size: 9.5pt; spacing: 8px; }}
+            QSlider::groove:horizontal {{ height: 6px; border-radius: 3px; background: {theme.fg(0.18)}; }}
             QSlider::sub-page:horizontal {{ background: {acc}; border-radius: 3px; }}
             QSlider#hue::groove:horizontal {{
                 background: qlineargradient(x1:0,y1:0,x2:1,y2:0, {_HUE_GRADIENT}); }}
@@ -198,9 +200,9 @@ class SettingsPopup(QFrame):
             QSlider::handle:horizontal {{ background: white; width: 14px; height: 14px;
                 margin: -5px 0; border-radius: 7px; }}
             QComboBox#IconSelect {{
-                background: rgba(255,255,255,0.10);
+                background: {theme.fg(0.10)};
                 color: {theme.TEXT};
-                border: 1px solid rgba(255,255,255,0.18);
+                border: 1px solid {theme.fg(0.18)};
                 border-radius: 4px;
                 padding: 3px 8px;
                 font-size: 9pt;
@@ -212,19 +214,19 @@ class SettingsPopup(QFrame):
                 border: 1px solid {acc};
             }}
             QToolButton {{
-                background: rgba(255,255,255,0.10);
+                background: {theme.fg(0.10)};
                 color: {theme.TEXT};
-                border: 1px solid rgba(255,255,255,0.15);
+                border: 1px solid {theme.fg(0.15)};
                 border-radius: 4px;
                 padding: 3px 8px;
                 font-size: 8.5pt;
             }}
             QToolButton:hover {{
-                background: rgba(255,255,255,0.18);
+                background: {theme.fg(0.18)};
             }}
-            QPushButton {{ background: rgba(255,255,255,0.10); color: {theme.TEXT};
-                border: 1px solid rgba(255,255,255,0.15); border-radius: 4px; padding: 6px; }}
-            QPushButton:hover {{ background: rgba(255,255,255,0.18); }}
+            QPushButton {{ background: {theme.fg(0.10)}; color: {theme.TEXT};
+                border: 1px solid {theme.fg(0.15)}; border-radius: 4px; padding: 6px; }}
+            QPushButton:hover {{ background: {theme.fg(0.18)}; }}
         """)
 
     def show_below(self, button):

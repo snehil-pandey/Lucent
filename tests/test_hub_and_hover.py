@@ -2,6 +2,7 @@ import pytest
 from PySide6.QtCore import Qt, QPoint
 from PySide6.QtWidgets import QApplication
 
+from lucent import winapi
 from lucent.config import Look
 from lucent.overlay import OverlayWindow
 from lucent.hub import HubWindow, OverlayListItem
@@ -49,6 +50,7 @@ def test_hub_window_instantiation_and_cards(qtbot):
     hub.close()
 
 
+@pytest.mark.skipif(not winapi.WIN, reason="hover tracker toggles WS_EX_TRANSPARENT (Windows only)")
 def test_selective_hover_click_through_tracker(qtbot):
     look = Look()
     win = OverlayWindow(look, None, index=1)

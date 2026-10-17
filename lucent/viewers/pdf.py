@@ -42,7 +42,7 @@ class PdfViewer(Viewer):
 
     def apply_theme(self, hue):
         pal = self._view.palette()
-        pal.setColor(QPalette.Dark, theme.background(hue).lighter(130))
+        pal.setColor(QPalette.Dark, theme.page_backdrop(hue))
         self._view.setPalette(pal)
         self._view.setStyleSheet(theme.scrollbar_stylesheet(hue))
 

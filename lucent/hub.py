@@ -7,7 +7,7 @@ Includes default settings corner, icon customization, and sticky notes creation.
 """
 import os
 from PySide6.QtCore import QPoint, QRect, QRectF, QSize, Qt, Signal
-from PySide6.QtGui import QColor, QFont, QGuiApplication, QIcon, QPainter, QPixmap
+from PySide6.QtGui import QColor, QFont, QGuiApplication, QIcon, QKeySequence, QPainter, QPixmap, QShortcut
 from PySide6.QtWidgets import (
     QFileDialog,
     QFrame,
@@ -22,7 +22,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from . import theme, winapi
+from . import glyphs, theme, winapi
 from .config import (
     Look,
     delete_overlay_record,
@@ -33,7 +33,6 @@ from .config import (
 )
 from .icon import app_icon, draw_shape_icon, render_overlay_pixmap
 from .settings_popup import SettingsPopup
-from .titlebar import GLYPH
 from .viewers import FILE_FILTER
 
 
@@ -111,9 +110,9 @@ class OverlayListItem(QFrame):
 
         if self.overlay is not None:
             # Controls for Active Overlays (3 buttons matching inactive card layout)
-            self.btn_front = self._make_btn(GLYPH.get("view", "👁"), "Bring Overlay to Front")
-            self.btn_rename = self._make_btn(GLYPH.get("edit", "✎"), "Rename Overlay")
-            self.btn_close = self._make_btn(GLYPH.get("close", "✕"), "Close Window", is_close=True)
+            self.btn_front = self._make_btn("view", "Bring Overlay to Front")
+            self.btn_rename = self._make_btn("edit", "Rename Overlay")
+            self.btn_close = self._make_btn("close", "Close Window", is_close=True)
 
             self.btn_front.clicked.connect(lambda: self.bring_front_requested.emit(self.overlay))
             self.btn_rename.clicked.connect(self._prompt_rename)
@@ -124,9 +123,9 @@ class OverlayListItem(QFrame):
             actions_lay.addWidget(self.btn_close)
         else:
             # Controls for Inactive / Saved Overlays
-            self.btn_open = self._make_btn(GLYPH.get("play", "▶"), "Open / Restore Overlay")
-            self.btn_rename = self._make_btn(GLYPH.get("edit", "✎"), "Rename Overlay")
-            self.btn_delete = self._make_btn(GLYPH.get("delete", "✕"), "Delete Overlay Record", is_close=True)
+            self.btn_open = self._make_btn("play", "Open / Restore Overlay")
+            self.btn_rename = self._make_btn("edit", "Rename Overlay")
+            self.btn_delete = self._make_btn("delete", "Delete Overlay Record", is_close=True)
 
             self.btn_open.clicked.connect(lambda: self.open_requested.emit(self.record))
             self.btn_rename.clicked.connect(self._prompt_rename)
@@ -152,7 +151,7 @@ class OverlayListItem(QFrame):
             self.lbl_tag.setText("ACTIVE")
             self.lbl_tag.setStyleSheet(f"""
                 QLabel {{
-                    background: rgba(255, 255, 255, 0.08);
+                    background: {theme.fg(0.08)};
                     color: {acc};
                     border: 1px solid {acc};
                     border-radius: 4px;
@@ -166,9 +165,9 @@ class OverlayListItem(QFrame):
             self.lbl_tag.setText("SAVED")
             self.lbl_tag.setStyleSheet(f"""
                 QLabel {{
-                    background: rgba(255, 255, 255, 0.04);
+                    background: {theme.fg(0.04)};
                     color: {theme.TEXT_MUTED};
-                    border: 1px solid rgba(255, 255, 255, 0.12);
+                    border: 1px solid {theme.fg(0.12)};
                     border-radius: 4px;
                     padding: 1px 6px;
                     font-size: 7.5pt;
@@ -202,7 +201,7 @@ class OverlayListItem(QFrame):
 
     def _make_btn(self, glyph, tip, is_close=False):
         btn = QToolButton(self)
-        btn.setText(glyph)
+        glyphs.set_glyph(btn, glyph, hover="#e81123" if is_close else None, size=16)
         btn.setToolTip(tip)
         btn.setFixedSize(28, 28)
         btn.setCursor(Qt.PointingHandCursor)
@@ -244,17 +243,17 @@ class OverlayListItem(QFrame):
     def _apply_idle_style(self):
         self.setStyleSheet(f"""
             QFrame#OverlayListItem {{
-                background: rgba(255, 255, 255, 0.04);
-                border: 1px solid rgba(255, 255, 255, 0.10);
+                background: {theme.fg(0.04)};
+                border: 1px solid {theme.fg(0.10)};
                 border-radius: 4px;
             }}
             QLabel#ItemTitle {{
                 color: {theme.TEXT};
-                font: 600 9.5pt "Segoe UI";
+                font-family: {theme.FONT_UI}; font-size: 9.5pt; font-weight: 600;
             }}
             QLabel#ItemSubtitle {{
                 color: {theme.TEXT_MUTED};
-                font: 8.5pt "Segoe UI";
+                font-family: {theme.FONT_UI}; font-size: 8.5pt;
             }}
             {theme.toolbutton_stylesheet()}
         """)
@@ -264,17 +263,17 @@ class OverlayListItem(QFrame):
         acc = theme.accent(self._hue).name()
         self.setStyleSheet(f"""
             QFrame#OverlayListItem {{
-                background: rgba(255, 255, 255, 0.08);
+                background: {theme.fg(0.08)};
                 border: 1px solid {acc};
                 border-radius: 4px;
             }}
             QLabel#ItemTitle {{
                 color: {theme.TEXT};
-                font: 600 9.5pt "Segoe UI";
+                font-family: {theme.FONT_UI}; font-size: 9.5pt; font-weight: 600;
             }}
             QLabel#ItemSubtitle {{
                 color: {theme.TEXT_MUTED};
-                font: 8.5pt "Segoe UI";
+                font-family: {theme.FONT_UI}; font-size: 8.5pt;
             }}
             {theme.toolbutton_stylesheet()}
         """)
@@ -339,14 +338,21 @@ class HubWindow(QWidget):
 
         # Default Settings Corner button
         self.btn_default_settings = QToolButton(self.titlebar)
-        self.btn_default_settings.setText(GLYPH.get("settings", "⚙"))
+        glyphs.set_glyph(self.btn_default_settings, "settings")
         self.btn_default_settings.setToolTip("App Default Settings (Theme, Transparency, Default Look)")
         self.btn_default_settings.setObjectName("settings")
         self.btn_default_settings.setFixedSize(36, 36)
         self.btn_default_settings.setFocusPolicy(Qt.NoFocus)
 
+        self.btn_mode = QToolButton(self.titlebar)
+        self.btn_mode.setObjectName("settings")
+        self.btn_mode.setFixedSize(36, 36)
+        self.btn_mode.setFocusPolicy(Qt.NoFocus)
+        self.btn_mode.clicked.connect(lambda: self.manager.toggle_mode())
+        self._update_mode_button()
+
         self.btn_close = QToolButton(self.titlebar)
-        self.btn_close.setText(GLYPH.get("close", "✕"))
+        glyphs.set_glyph(self.btn_close, "close", hover="#e81123")
         self.btn_close.setToolTip("Close Hub")
         self.btn_close.setObjectName("close")
         self.btn_close.setFixedSize(44, 36)
@@ -356,11 +362,13 @@ class HubWindow(QWidget):
         title_lay.addWidget(logo)
         title_lay.addWidget(self.lbl_title)
         title_lay.addStretch(1)
+        title_lay.addWidget(self.btn_mode)
         title_lay.addWidget(self.btn_default_settings)
         title_lay.addWidget(self.btn_close)
         root.addWidget(self.titlebar)
 
         # Settings popup for Default Settings Corner
+        QShortcut(QKeySequence("Ctrl+Shift+L"), self, activated=lambda: self.manager.toggle_mode())
         self.default_popup = SettingsPopup(self)
         self.default_popup.sync(self.default_look)
         self._wire_default_settings()
@@ -407,7 +415,7 @@ class HubWindow(QWidget):
         # Browse button with icon
         self.btn_browse = QToolButton(self.input_container)
         self.btn_browse.setObjectName("FileBtn")
-        self.btn_browse.setText(GLYPH.get("open", "▤"))
+        glyphs.set_glyph(self.btn_browse, "open")
         self.btn_browse.setToolTip("Browse local file (PDF, Image, Markdown, Code)")
         self.btn_browse.setCursor(Qt.PointingHandCursor)
         self.btn_browse.setFixedSize(36, 32)
@@ -440,7 +448,14 @@ class HubWindow(QWidget):
         self.cards_layout.setContentsMargins(0, 2, 2, 2)
         self.cards_layout.setSpacing(8)
         self.cards_layout.addStretch(1)
+        self.lbl_empty = QLabel("No overlays yet.\nPaste a link or choose a file above, or start a Sticky Note.")
+        self.lbl_empty.setObjectName("EmptyState")
+        self.lbl_empty.setAlignment(Qt.AlignCenter)
+        self.lbl_empty.setWordWrap(True)
+        self.cards_layout.insertWidget(0, self.lbl_empty)
         self.scroll.setWidget(self.scroll_content)
+        self.scroll.viewport().setAutoFillBackground(False)
+        self.scroll_content.setAutoFillBackground(False)
 
         body_lay.addWidget(self.scroll, 1)
 
@@ -521,11 +536,11 @@ class HubWindow(QWidget):
                 background: {ch};
                 border-top-left-radius: 4px;
                 border-top-right-radius: 4px;
-                border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+                border-bottom: 1px solid {theme.fg(0.08)};
             }}
             QLabel#title {{
                 color: {theme.TEXT};
-                font: 600 9.5pt "Segoe UI";
+                font-family: {theme.FONT_UI}; font-size: 9.5pt; font-weight: 600;
             }}
             QWidget#HubBody {{
                 background: transparent;
@@ -534,76 +549,81 @@ class HubWindow(QWidget):
                 background: transparent;
                 border: none;
             }}
+            QScrollArea#CardsScrollArea > QWidget > QWidget {{
+                background: transparent;
+            }}
             QFrame#InputContainer {{
-                background: rgba(255, 255, 255, 0.04);
-                border: 1px solid rgba(255, 255, 255, 0.10);
+                background: {theme.fg(0.04)};
+                border: 1px solid {theme.fg(0.10)};
                 border-radius: 4px;
             }}
             QLabel#InputPrompt {{
-                font: 600 9pt "Segoe UI";
+                font-family: {theme.FONT_UI}; font-size: 9pt; font-weight: 600;
                 color: {theme.TEXT_MUTED};
             }}
             QPushButton#StickyNoteBtn {{
-                background: rgba(255, 255, 255, 0.08);
+                background: {theme.fg(0.08)};
                 color: {theme.TEXT};
-                font: 8.5pt "Segoe UI";
-                border: 1px solid rgba(255, 255, 255, 0.14);
+                font-family: {theme.FONT_UI}; font-size: 8.5pt;
+                border: 1px solid {theme.fg(0.14)};
                 border-radius: 4px;
                 padding: 3px 8px;
             }}
             QPushButton#StickyNoteBtn:hover {{
-                background: rgba(255, 255, 255, 0.16);
+                background: {theme.fg(0.16)};
             }}
             QLabel#StatusLabel {{
                 color: {theme.TEXT_MUTED};
-                font: 8.5pt "Segoe UI";
+                font-family: {theme.FONT_UI}; font-size: 8.5pt;
             }}
             QLineEdit#UrlInputBox {{
-                background: rgba(255, 255, 255, 0.06);
+                background: {theme.fg(0.06)};
                 color: {theme.TEXT};
-                border: 1px solid rgba(255, 255, 255, 0.14);
+                border: 1px solid {theme.fg(0.14)};
                 border-radius: 4px;
                 padding: 6px 10px;
-                font: 9.5pt "Segoe UI";
+                font-family: {theme.FONT_UI}; font-size: 9.5pt;
             }}
             QLineEdit#UrlInputBox:focus {{
                 border: 1px solid {acc};
-                background: rgba(255, 255, 255, 0.10);
+                background: {theme.fg(0.10)};
             }}
             QLineEdit#SearchBox {{
-                background: rgba(255, 255, 255, 0.04);
+                background: {theme.fg(0.04)};
                 color: {theme.TEXT};
-                border: 1px solid rgba(255, 255, 255, 0.10);
+                border: 1px solid {theme.fg(0.10)};
                 border-radius: 4px;
                 padding: 6px 10px;
-                font: 8.5pt "Segoe UI";
+                font-family: {theme.FONT_UI}; font-size: 8.5pt;
             }}
             QLineEdit#SearchBox:focus {{
                 border: 1px solid {acc};
-                background: rgba(255, 255, 255, 0.08);
+                background: {theme.fg(0.08)};
             }}
             QToolButton#FileBtn {{
-                background: rgba(255, 255, 255, 0.08);
+                background: {theme.fg(0.08)};
                 color: {theme.TEXT};
-                font-family: "Segoe MDL2 Assets";
                 font-size: 10pt;
-                border: 1px solid rgba(255, 255, 255, 0.15);
+                border: 1px solid {theme.fg(0.15)};
                 border-radius: 4px;
             }}
             QToolButton#FileBtn:hover {{
-                background: rgba(255, 255, 255, 0.16);
+                background: {theme.fg(0.16)};
             }}
             QPushButton#ActionBtn {{
-                background: {acc};
-                color: #0b111e;
-                font: 600 9.5pt "Segoe UI";
+                background: {theme.accent_fill(hue).name()};
+                color: #ffffff;
+                font-family: {theme.FONT_UI}; font-size: 9.5pt; font-weight: 600;
                 border: none;
                 border-radius: 4px;
                 padding: 6px 14px;
             }}
             QPushButton#ActionBtn:hover {{
-                background: {acc};
-                opacity: 0.9;
+                background: {theme.accent_fill(hue).lighter(115).name()};
+            }}
+            QLabel#EmptyState {{
+                color: {theme.TEXT_MUTED};
+                font-family: {theme.FONT_UI}; font-size: 10pt;
             }}
             {theme.toolbutton_stylesheet()}
             {theme.scrollbar_stylesheet(hue)}
@@ -612,6 +632,14 @@ class HubWindow(QWidget):
         self.default_popup.apply_theme(hue)
         for item in self._item_widgets:
             item.apply_theme(hue)
+        self._update_mode_button()
+        glyphs.refresh(self)
+
+    def _update_mode_button(self):
+        light = theme.is_light()
+        glyphs.set_glyph(self.btn_mode, "moon" if light else "sun")
+        self.btn_mode.setToolTip("Switch to dark mode  (Ctrl+Shift+L)" if light
+                                 else "Switch to light mode  (Ctrl+Shift+L)")
 
     def focus_input(self):
         """Focus the input text box and select all for rapid new overlay creation."""
@@ -695,6 +723,7 @@ class HubWindow(QWidget):
         active_count = len(active_windows)
         self.lbl_status.setText(f"{active_count} active / {total} total overlays recorded")
         self._filter_items(self.search_box.text())
+        self.lbl_empty.setVisible(total == 0)
 
     def _restore_inactive_overlay(self, record: dict):
         src = record.get("source") or None

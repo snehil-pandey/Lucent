@@ -100,7 +100,7 @@ class CodeEditor(QPlainTextEdit):
 
         self.update_line_number_area_width(0)
         self.setFrameShape(QFrame.NoFrame)
-        self.setFont(QFont("Cascadia Mono, Consolas, Courier New", 10))
+        self.setFont(theme.mono_font(10))
         self.setTabStopDistance(QFontMetrics(self.font()).horizontalAdvance(" ") * 4)
 
     def line_number_area_width(self):
@@ -133,7 +133,8 @@ class CodeEditor(QPlainTextEdit):
         extra_selections = []
         if not self.isReadOnly():
             selection = QTextEdit.ExtraSelection()
-            line_color = QColor(255, 255, 255, 12)
+            line_color = QColor(theme.TEXT)
+            line_color.setAlpha(14)
             selection.format.setBackground(line_color)
             selection.format.setProperty(QTextCharFormat.FullWidthSelection, True)
             selection.cursor = self.textCursor()

@@ -1,6 +1,6 @@
 # Lucent
 
-**Lucent** is a sleek, transparent, always-on-top overlay viewer for Windows built with Python and PySide6 (Qt). It allows you to display PDFs, images, web pages, and text documents in customizable floating windows that can even be hidden from screenshots and screen recordings.
+**Lucent** is a transparent, always-on-top overlay viewer for Windows and Linux built with Python and PySide6 (Qt). It allows you to display PDFs, images, web pages, and text documents in customizable floating windows that can even be hidden from screenshots and screen recordings.
 
 ---
 
@@ -44,6 +44,8 @@
 
 ## ⌨️ Keyboard Shortcuts
 
+Dark and light mode: `Ctrl+Shift+L` (or the sun/moon button in the Hub).
+
 | Shortcut | Scope | Action |
 | --- | --- | --- |
 | `Ctrl + Alt + M` | **Global (System-Wide)** | **Toggle Click-Through / Ghost Mode** (works even when Lucent isn't focused) |
@@ -69,10 +71,24 @@
 
 ## 🚀 Getting Started
 
+### What works where
+
+| Feature | Windows | Linux |
+| --- | --- | --- |
+| PDFs, images, web pages, text, notes | yes | yes |
+| Opacity, hue, invert, collapse, snap presets, Hub | yes | yes |
+| Always on top | yes | yes (X11, and Wayland through XWayland) |
+| Click-through (ghost mode) | yes, title bar stays clickable | yes, whole window; use the tray icon, `Ctrl+Alt+M` on X11, or `lucent --toggle-click-through` to turn it off |
+| System-wide `Ctrl+Alt+M` | yes | X11 only (needs `pynput`, installed by default) |
+| Hide from screenshots and screen recordings | yes | **no**. Linux has no API for it, so the option is disabled |
+
+Linux support is new. The test suite and the installer pass on a headless system; reports from real desktops are welcome.
+
 ### Prerequisites
 
 - Python 3.10+ (tested on Python 3.13)
-- Windows 10/11 (for Windows-specific display affinity features)
+- Windows 10/11, or Linux with X11 or Wayland (Wayland runs through XWayland, which is the default here)
+- Windows 10 version 2004 or later for hiding overlays from screen recordings
 
 ### Installation
 
@@ -92,6 +108,37 @@
    ```bash
    pip install -r requirements.txt
    ```
+
+### Installing on Linux
+
+```
+git clone https://github.com/snehil-pandey/Lucent.git
+cd Lucent
+packaging/linux/install.sh
+```
+
+This installs for your user only (no root): the app and its own virtualenv in `~/.local/share/lucent`, a `lucent` command in `~/.local/bin`, and a menu entry. Run `packaging/linux/install.sh --uninstall` to remove it.
+
+If Lucent does not start, Qt may be missing a system library. On Debian or Ubuntu:
+
+```
+sudo apt install libxcb-cursor0 libxkbcommon-x11-0 libxcb-icccm4 libxcb-keysyms1 libxcb-shape0 libnss3
+```
+
+**Controlling a running Lucent from the terminal.** Only one Lucent runs at a time. Running `lucent` again talks to the first one:
+
+```
+lucent report.pdf              # open a file in the running instance
+lucent --toggle-click-through  # ghost mode on/off
+lucent --hub                   # bring up the Hub
+lucent --new                   # new empty overlay
+```
+
+On Wayland a program cannot listen for global key presses, so bind `lucent --toggle-click-through` to a key in your desktop's keyboard settings. That gives you the same `Ctrl+Alt+M` behaviour as on Windows.
+
+On GNOME the tray icon needs the AppIndicator extension. Without it, use the command above.
+
+If you want native Wayland instead of XWayland, set `LUCENT_WAYLAND=1`. Always-on-top and window positioning will not work there.
 
 ### Running Lucent
 
@@ -132,6 +179,7 @@ Lucent/
 │   ├── theme.py            # Dynamic single-hue CSS/QSS styling engine
 │   ├── titlebar.py         # Custom frameless title bar and address input
 │   └── winapi.py           # Windows display affinity & taskbar integrations
+├── packaging/linux/        # install.sh and the .desktop entry
 ├── main.py                 # Application entry point
 ├── requirements.txt        # Python package dependencies
 ├── USER_GUIDE.md           # Comprehensive user manual & operation guide
