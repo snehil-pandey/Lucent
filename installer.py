@@ -242,7 +242,8 @@ class InstallerWindow(QWidget):
     def __init__(self, bundle_source: str):
         super().__init__()
         self.bundle_source = bundle_source
-        self.setWindowTitle("Lucent Setup & Custom Installer")
+        from lucent.config import APP_VERSION
+        self.setWindowTitle(f"Lucent Setup & Custom Installer v{APP_VERSION}")
         self.setFixedSize(560, 490)
         from lucent.icon import app_icon, render_overlay_pixmap
         self.setWindowIcon(app_icon())
@@ -335,7 +336,8 @@ class InstallerWindow(QWidget):
 
         text_vlay = QVBoxLayout()
         text_vlay.setSpacing(4)
-        lbl_title = QLabel("Lucent Setup")
+        from lucent.config import APP_VERSION
+        lbl_title = QLabel(f"Lucent Setup v{APP_VERSION}")
         lbl_title.setObjectName("Title")
         lbl_desc = QLabel("Install Lucent transparent overlay viewer with custom directories and integrations.")
         lbl_desc.setStyleSheet("color: #94a3b8; font-size: 12px; background: transparent;")

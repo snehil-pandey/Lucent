@@ -333,8 +333,10 @@ class HubWindow(QWidget):
 
         logo = QLabel()
         logo.setPixmap(app_icon().pixmap(18, 18))
-        self.lbl_title = QLabel("Lucent Overlays")
+        from .config import APP_VERSION
+        self.lbl_title = QLabel(f"Lucent Overlays")
         self.lbl_title.setObjectName("title")
+        self.lbl_title.setToolTip(f"Lucent v{APP_VERSION}")
 
         # Default Settings Corner button
         self.btn_default_settings = QToolButton(self.titlebar)

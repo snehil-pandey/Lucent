@@ -16,12 +16,16 @@ QCoreApplication.setAttribute(Qt.AA_DontCreateNativeWidgetSiblings)
 from PySide6.QtWidgets import QApplication  # noqa: E402
 
 from lucent import winapi  # noqa: E402
-from lucent.config import APP_ID, APP_NAME  # noqa: E402
+from lucent.config import APP_ID, APP_NAME, APP_VERSION  # noqa: E402
 from lucent.icon import app_icon  # noqa: E402
 from lucent.manager import Manager  # noqa: E402
 
 
 def main() -> int:
+    if any(arg in sys.argv[1:] for arg in ("--version", "-v")):
+        print(f"{APP_NAME} v{APP_VERSION}")
+        return 0
+
     winapi.set_app_id(APP_ID)
     app = QApplication(sys.argv)
     app.setApplicationName(APP_NAME)
