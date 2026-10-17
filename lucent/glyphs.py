@@ -177,10 +177,14 @@ class _HoverSwap(QObject):
         btn.installEventFilter(self)
 
     def eventFilter(self, obj, ev):
-        if ev.type() == QEvent.Enter:
-            self.btn.setIcon(self.hover)
-        elif ev.type() in (QEvent.Leave, QEvent.Hide):
-            self.btn.setIcon(self.normal)
+        try:
+            if ev.type() == QEvent.Enter:
+                self.btn.setIcon(self.hover)
+            elif ev.type() in (QEvent.Leave, QEvent.Hide):
+                self.btn.setIcon(self.normal)
+        except RuntimeError:
+            # Underlying C++ QToolButton has been destroyed during window close/teardown
+            pass
         return False
 
 
