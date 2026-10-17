@@ -211,6 +211,15 @@ class InstallWorker(QThread):
             with open(cmd_wrapper, "w") as f:
                 f.write(f'@echo off\nstart "" "{target_exe}" %*\n')
 
+            # Install uninstaller helper script and cmd shortcut
+            uninstall_src = os.path.join(os.path.dirname(os.path.abspath(__file__)), "uninstall.py")
+            uninstall_dst = os.path.join(self.install_dir, "uninstall.py")
+            if os.path.isfile(uninstall_src):
+                shutil.copy2(uninstall_src, uninstall_dst)
+            uninst_cmd = os.path.join(self.install_dir, "uninstall.cmd")
+            with open(uninst_cmd, "w") as f:
+                f.write(f'@echo off\npython "{uninstall_dst}" %*\n')
+
             self.progress.emit(60, "Configuring custom cache directory in settings...")
             if self.cache_dir:
                 # Save cache location to registry
@@ -220,6 +229,24 @@ class InstallWorker(QThread):
                     winreg.CloseKey(s_key)
                 except Exception as e:
                     print(f"Registry cache set error: {e}")
+
+            # Register in Windows Add/Remove Programs
+            try:
+                from lucent.config import APP_VERSION
+                uninst_reg = winreg.CreateKey(
+                    winreg.HKEY_CURRENT_USER,
+                    r"Software\Microsoft\Windows\CurrentVersion\Uninstall\Lucent"
+                )
+                winreg.SetValueEx(uninst_reg, "DisplayName", 0, winreg.REG_SZ, "Lucent Overlay Viewer")
+                winreg.SetValueEx(uninst_reg, "DisplayVersion", 0, winreg.REG_SZ, APP_VERSION)
+                winreg.SetValueEx(uninst_reg, "DisplayIcon", 0, winreg.REG_SZ, target_exe)
+                winreg.SetValueEx(uninst_reg, "InstallLocation", 0, winreg.REG_SZ, self.install_dir)
+                winreg.SetValueEx(uninst_reg, "Publisher", 0, winreg.REG_SZ, "Lucent")
+                uninst_string = f'"{uninst_cmd}"'
+                winreg.SetValueEx(uninst_reg, "UninstallString", 0, winreg.REG_SZ, uninst_string)
+                winreg.CloseKey(uninst_reg)
+            except Exception as e:
+                print(f"Error registering uninstaller: {e}")
 
             if self.add_path:
                 self.progress.emit(75, "Adding Lucent to PATH...")

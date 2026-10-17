@@ -110,6 +110,14 @@ Linux support is new. The test suite and the installer pass on a headless system
    pip install -r requirements.txt
    ```
 
+### 🗑️ Uninstallation
+
+- **Windows**:
+  - Run `uninstall.cmd` or `python uninstall.py` in your installation directory, or uninstall directly from **Windows Settings > Installed Apps** (Control Panel Add/Remove Programs).
+  - CLI options: `--silent` (headless silent removal) and `--purge-settings` (also delete cache, geometry history, and registry config).
+- **Linux**:
+  - Run `packaging/linux/install.sh --uninstall`.
+
 ### Installing on Linux
 
 ```
