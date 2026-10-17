@@ -352,6 +352,14 @@ class OverlayWindow(QWidget):
         self.body_layout.addWidget(viewer)
         viewer.apply_theme(self.look.hue)
         viewer.title_changed.connect(self._on_title)
+        if hasattr(viewer, "source_changed"):
+            viewer.source_changed.connect(self._on_source_changed)
+
+    def _on_source_changed(self, new_source: str):
+        if new_source and new_source != self.current_source:
+            self.current_source = new_source
+            add_recent_source(new_source)
+            self.persist_state()
 
     def _on_title(self, title):
         display_title = title if title else f"Overlay #{self.index}"
