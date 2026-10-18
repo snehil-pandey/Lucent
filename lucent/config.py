@@ -6,7 +6,7 @@ from PySide6.QtCore import QSettings
 
 APP_NAME = "Lucent"
 APP_ID = "Lucent.Overlay"
-APP_VERSION = "0.9.0"
+APP_VERSION = "0.9.1"
 
 
 @dataclass
